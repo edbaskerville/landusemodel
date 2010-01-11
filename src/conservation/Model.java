@@ -16,13 +16,13 @@ import static java.lang.Math.*;
 import cern.jet.random.*;
 import cern.jet.random.engine.*;
 
-
-// TODO: output images less frequently
-// TODO: Constant degradation rate
 // TODO: implement non-spatial version
 
 public class Model implements StochasticModel
 {
+	@Parameter(shortName="T")
+	double maxTime = 10000;
+	
 	@Parameter(shortName="oi")
 	boolean outputImages = false;
 	
@@ -45,7 +45,14 @@ public class Model implements StochasticModel
 	// Parameter controlling P->D rate
 	@Parameter double c = 0.01;
 	
-	// Parameters controlling A->D rate
+	// If deltaF == true, the A->D rate depends on the fraction
+	// of forested neighbors.
+	@Parameter boolean deltaF = true;
+	
+	// Parameter controlling constant A->D rate
+	@Parameter double delta = 0.5;
+	
+	// Parameters controlling variable A->D rate
 	@Parameter double m = 0.3;
 	@Parameter double q = 1;
 	
@@ -188,26 +195,31 @@ public class Model implements StochasticModel
 			public double getRate()
 			{
 				assert(state == State.Agricultural);
-				int nP = 0;
-				int nF = 0;
 				
-				for(Site site : getNeighbors())
+				if(deltaF)
 				{
-					switch(site.state)
+					int nP = 0;
+					int nF = 0;
+					
+					for(Site site : getNeighbors())
 					{
-						case Populated:
-							nP++;
-							break;
-						case Forest:
-							nF++;
-							break;
+						switch(site.state)
+						{
+							case Populated:
+								nP++;
+								break;
+							case Forest:
+								nF++;
+								break;
+						}
 					}
+					
+					if(nP == 0) return 1.0;
+					
+					double nFq = pow(nF, q);
+					return 1.0 -  nFq/(nFq + m);
 				}
-				
-				if(nP == 0) return 1.0;
-				
-				double nFq = pow(nF, q);
-				return 1.0 -  nFq/(nFq + m);
+				else return delta;
 			}
 		}
 

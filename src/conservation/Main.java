@@ -32,7 +32,7 @@ public class Main
 			sim.addLogger(new ImageLogger(model));
 		
 		System.err.println("Start date: " + new Date());
-		double T = params.getDoubleValue("T", 1000.0);
+		double T = model.maxTime;
 		sim.runUntil(T);
 		sim.finish();
 		System.err.println("End date: " + new Date());
