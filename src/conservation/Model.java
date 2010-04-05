@@ -16,10 +16,11 @@ import static java.lang.Math.*;
 import cern.jet.random.*;
 import cern.jet.random.engine.*;
 
-// TODO: implement non-spatial version
-
 public class Model implements StochasticModel
 {
+	@Parameter(shortName="g")
+	double globalFraction = 0.0;
+	
 	@Parameter(shortName="T")
 	double maxTime = 10000;
 	
@@ -87,7 +88,7 @@ public class Model implements StochasticModel
 	
 	// Size of lattice
 	@Parameter int L = 100;
-
+	
 	RandomEngine rng;
 	Lattice<Site> space;
 	Normal betaDist;
@@ -134,18 +135,16 @@ public class Model implements StochasticModel
 		int col;
 		double birthTime;
 		
-		// Maintains map from destination state to associated event
-		// E.g., if state == Populated, then
-		// the map will contain two items, from Degraded to a PDEvent object,
-		// and from Populated to a BetaChangeEvent object (for convenience).
-		public EnumMap<State, Event> activeEvents;
+		// Maintains map from class of event to the actual event object
+		// so different objects can be easily retrieved/invalidated/etc.
+		public Map<Class<? extends Event>, Event> activeEvents;
 		
 		public Site(State state, int row, int col)
 		{
 			this.state = state;
 			this.row = row;
 			this.col = col;
-			activeEvents = new EnumMap<State, Event>(State.class);
+			activeEvents = new HashMap<Class<? extends Event>, Event>();
 			birthTime = 0;
 		}
 		
@@ -169,7 +168,7 @@ public class Model implements StochasticModel
 			public void performEvent(double time, Set<Event> eventsToRemove,
 					Set<Event> eventsToUpdate)
 			{
-				performStateChange(time ,State.Populated, State.Degraded, eventsToRemove, eventsToUpdate);
+				performStateChange(time, State.Populated, State.Degraded, eventsToRemove, eventsToUpdate);
 				betaSum -= beta;
 			}
 			
@@ -292,7 +291,7 @@ public class Model implements StochasticModel
 								}
 							}
 						}
-						double alpha = agriculturalProductivity/(agriculturalProductivity + r);
+						double alpha = (1.0 - globalFraction) * agriculturalProductivity/(agriculturalProductivity + r);
 						alphas.put(siteP, alpha);
 						alphaTotal += alpha;
 					}
@@ -329,6 +328,63 @@ public class Model implements StochasticModel
 			}
 		}
 		
+		
+		/**
+		 * Inner class representing global colonization events (D->P or F->P).
+		 * Unlike other events, which are applied to the site that is changing state,
+		 * this event is centered around the "colonizer," and then a random colonized site
+		 * is chosen from those available.
+		 */
+		class GlobalDFPEvent extends SiteEvent
+		{
+			public void performEvent(double time, Set<Event> eventsToRemove,
+					Set<Event> eventsToUpdate)
+			{
+				assert(state == State.Populated);
+				
+				int totalCount = stateCounts.get(State.Forest).value + stateCounts.get(State.Degraded).value;
+				
+				if(totalCount > 0)
+				{
+					Uniform unif = new Uniform(rng);
+					
+					Site site;
+					do
+					{
+						int row = unif.nextIntFromTo(0, L-1);
+						int col = unif.nextIntFromTo(0, L-1);
+						site = space.get(row, col);
+					} while(site.state != State.Forest && site.state != State.Degraded);
+					
+					site.performStateChange(time, site.state, State.Populated, eventsToRemove, eventsToUpdate);
+					site.beta = beta;
+					betaSum += beta;
+				}
+			}
+			
+			public double getRate()
+			{
+				assert(state == State.Populated);
+				double agriculturalProductivity = 0;
+				for(Site siteA : space.getNeighbors(row, col))
+				{
+					if(siteA.state == State.Agricultural)
+					{
+						switch(productivityFunction)
+						{
+							case A:
+								agriculturalProductivity += 1.0;
+								break;
+							case AF:
+								agriculturalProductivity += siteA.getNeighborCount(State.Forest) / 7.0;
+								break;
+						}
+					}
+				}
+				return globalFraction * agriculturalProductivity/(agriculturalProductivity + r);
+			}
+		}
+		
 		/**
 		 * Inner class representing change of beta (rate at which people convert land to agriculture).
 		 */
@@ -348,7 +404,7 @@ public class Model implements StochasticModel
 				{
 					if(site.state == State.Forest)
 					{
-						eventsToUpdate.add(site.getTransitionEvent(State.Agricultural));
+						eventsToUpdate.add(site.getEvent(FAEvent.class));
 					}
 				}
 			}
@@ -419,27 +475,30 @@ public class Model implements StochasticModel
 		
 		void setUpEventsPopulated()
 		{
-			addEvent(State.Degraded, new PDEvent());
-			addEvent(State.Populated, new BetaChangeEvent());
+			addEvent(new PDEvent());
+			addEvent(new BetaChangeEvent());
+			if(globalFraction > 0.0)
+				addEvent(new GlobalDFPEvent());
 		}
 
 		void setUpEventsAgricultural()
 		{
-			addEvent(State.Degraded, new ADEvent());
+			addEvent(new ADEvent());
 		}
 
 		void setUpEventsForest()
 		{
-			addEvent(State.Agricultural, new FAEvent());
-			addEvent(State.Populated, new DFPEvent());
+			addEvent(new FAEvent());
+			if(globalFraction < 1.0)
+				addEvent(new DFPEvent());
 		}
 		
 		void setUpEventsDegraded()
 		{
-			addEvent(State.Forest, new DFEvent());
+			addEvent(new DFEvent());
 			
-			if(useDP)
-				addEvent(State.Populated, new DFPEvent());
+			if(useDP && globalFraction < 1.0)
+				addEvent(new DFPEvent());
 		}
 		
 		/**
@@ -474,15 +533,16 @@ public class Model implements StochasticModel
 				switch(site.state)
 				{
 					case Agricultural:
-						events.add(site.getTransitionEvent(State.Degraded));
+						events.add(site.getEvent(ADEvent.class));
 						break;
 					case Forest:
-						events.add(site.getTransitionEvent(State.Agricultural));
-						events.add(site.getTransitionEvent(State.Populated));
+						events.add(site.getEvent(FAEvent.class));
+						if(globalFraction < 1.0)
+							events.add(site.getEvent(DFPEvent.class));
 						break;
 					case Degraded:
-						if(useDP)
-							events.add(site.getTransitionEvent(State.Populated));
+						if(useDP && globalFraction < 1.0)
+							events.add(site.getEvent(DFPEvent.class));
 						break;
 				}
 			}
@@ -494,12 +554,18 @@ public class Model implements StochasticModel
 			{
 				if(site.state == State.Populated)
 				{
-					events.add(site.getTransitionEvent(State.Degraded));
+					if(globalFraction > 0.0)
+						events.add(site.getEvent(GlobalDFPEvent.class));
 					
-					for(Site site2 : site.getNeighbors())
+					events.add(site.getEvent(PDEvent.class));
+					
+					if(useDP && globalFraction < 1.0)
 					{
-						if(useDP && site2.state == State.Degraded || site2.state == State.Forest)
-							events.add(site2.getTransitionEvent(State.Populated));
+						for(Site site2 : site.getNeighbors())
+						{
+							if(site2.state == State.Degraded || site2.state == State.Forest)
+								events.add(site2.getEvent(DFPEvent.class));
+						}
 					}
 				}
 			}
@@ -511,20 +577,28 @@ public class Model implements StochasticModel
 			{
 				if(site.state == State.Agricultural)
 				{
-					events.add(site.getTransitionEvent(State.Degraded));
+					events.add(site.getEvent(ADEvent.class));
 					
 					if(productivityFunction == ProductivityFunction.AF)
 					{
 						for(Site site2 : site.getNeighbors())
 							if(site2.state == State.Populated)
-								for(Site site3 : site2.getNeighbors())
-									if(useDP && site3.state == State.Degraded || site3.state == State.Forest)
-										events.add(site3.getTransitionEvent(State.Populated));
+							{
+								if(globalFraction > 0.0)
+									events.add(site2.getEvent(GlobalDFPEvent.class));
+								
+								if(useDP && globalFraction < 1.0)
+								{
+									for(Site site3 : site2.getNeighbors())
+										if(site3.state == State.Degraded || site3.state == State.Forest)
+											events.add(site3.getEvent(DFPEvent.class));
+								}
+							}
 					}
 				}
 				else if(epsF && site.state == State.Degraded)
 				{
-					events.add(site.getTransitionEvent(State.Forest));
+					events.add(site.getEvent(DFEvent.class));
 				}
 			}
 		}
@@ -560,19 +634,26 @@ public class Model implements StochasticModel
 		 * @param to The destination state. (Start state is the current state.)
 		 * @param event The event object.
 		 */
-		void addEvent(State to, Event event)
+		void addEvent(Event event)
 		{
-			activeEvents.put(to, event);
+			activeEvents.put(event.getClass(), event);
 		}
 		
 		/**
 		 * Convenience method (for readability) to retrieve an event object.
-		 * @param to The destination state. (Start state is the current state.)
+		 * @param cl The class of the event.
 		 * @return The event object.
 		 */
-		Event getTransitionEvent(State to)
+		Event getEvent(Class<? extends Event> cl)
 		{
-			return activeEvents.get(to);
+			return activeEvents.get(cl);
+			/*Event event = activeEvents.get(cl);
+			if(event == null)
+			{
+				System.err.println("null event!");
+			}
+			
+			return event;*/
 		}
 	}
 	
