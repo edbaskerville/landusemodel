@@ -78,8 +78,8 @@ public class SpatialModel extends SuperModel
 			public double getRate()
 			{
 				assert(state == State.Populated);
-				double nA = getNeighborCount(State.Agricultural);
-				return 1.0 - nA/(nA + config.c);
+				double a = getNeighborCount(State.Agricultural) / 8.0;
+				return 1.0 - a/(a + config.c);
 			}
 		}
 
@@ -118,8 +118,8 @@ public class SpatialModel extends SuperModel
 					
 					if(nP == 0) return 1.0;
 					
-					double nFq = pow(nF, config.q);
-					return 1.0 -  nFq/(nFq + config.m);
+					double fq = pow(nF / 8.0, config.q);
+					return 1.0 -  fq/(fq + config.m);
 				}
 				else return config.delta;
 			}
@@ -194,6 +194,7 @@ public class SpatialModel extends SuperModel
 								}
 							}
 						}
+						agriculturalProductivity /= 8.0;
 						double alpha = (1.0 - config.globalFraction) * agriculturalProductivity/(agriculturalProductivity + config.r);
 						alphas.put(siteP, alpha);
 						alphaTotal += alpha;

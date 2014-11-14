@@ -215,7 +215,7 @@ class WellMixedModel extends SuperModel
 				if(P == 0) factor = 1.0;
 				else
 				{
-					double numerator = Math.pow(8.0 * F / N, config.q);
+					double numerator = Math.pow((double)F / N, config.q);
 					factor = 1.0 - numerator / (numerator + config.m);
 				}
 			}
@@ -274,13 +274,13 @@ class WellMixedModel extends SuperModel
 			switch(config.productivityFunction)
 			{
 				case A:
-					numerator = 8.0 * a;
+					numerator = a;
 					break;
 				case AF:
-					numerator = 8.0 * a * 8.0 * f / 7.0;
+					numerator = a * 8.0 * f / 7.0;
 					break;
 			}
-			return F * 8.0 * p * numerator / (numerator + config.r);
+			return F * p * numerator / (numerator + config.r);
 		}
 
 		@Override
