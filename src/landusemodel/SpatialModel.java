@@ -1,10 +1,9 @@
-package conservation;
+package landusemodel;
 
 import java.util.*;
 import java.util.Map.Entry;
 
 import jstoch.model.*;
-import jstoch.parameters.*;
 import jstoch.random.*;
 import jstoch.space.Lattice;
 import jstoch.space.Lattice.BoundaryCondition;
@@ -16,80 +15,8 @@ import static java.lang.Math.*;
 import cern.jet.random.*;
 import cern.jet.random.engine.*;
 
-public class Model implements StochasticModel
+public class SpatialModel extends SuperModel
 {
-	@Parameter(shortName="g")
-	double globalFraction = 0.0;
-	
-	@Parameter(shortName="T")
-	double maxTime = 10000;
-	
-	@Parameter(shortName="oi")
-	boolean outputImages = false;
-	
-	// Image output interval
-	@Parameter(shortName="ii")
-	double imageInterval = 1000.0;
-	
-	// Logging interval
-	@Parameter(shortName="li")
-	double logInterval = 1.0;
-	
-	@Parameter(shortName="rn") Integer runNum = null;
-	
-	@Parameter(shortName="rs")
-	Integer randomSeed = null;
-	
-	// Beta evolution rate
-	@Parameter double mu = 0.2;
-	
-	// Parameter controlling P->D rate
-	@Parameter double c = 0.01;
-	
-	// If deltaF == true, the A->D rate depends on the fraction
-	// of forested neighbors.
-	@Parameter boolean deltaF = true;
-	
-	// Parameter controlling constant A->D rate
-	@Parameter double delta = 0.5;
-	
-	// Parameters controlling variable A->D rate
-	@Parameter double m = 0.3;
-	@Parameter double q = 1;
-	
-	// Parameter controlling D->F rate
-	@Parameter double eps = 0.3;
-	
-	// If epsF == true, the D->F rate depends on the fraction
-	// of forested neighbors.
-	@Parameter boolean epsF = false;
-	
-	// F->A rate of initial individual
-	@Parameter double beta0 = 1.0;
-	
-	// Parameter controlling F->P, D->P rate
-	@Parameter double r = 12;
-	
-	// If useDP == true, degraded sites can be invaded by populated sites;
-	// if useDP == false, they cannot
-	@Parameter boolean useDP = true; 
-	
-	// Parameter controlling dependence on D->P/F->P rate
-	// "A" just depends on agricultural sites;
-	// "AF depends on the productivity of the agricultural sites
-	// taking into account the presence of forest around them
-	enum ProductivityFunction
-	{
-		A,
-		AF
-	}
-	@Parameter(shortName="pf")
-	ProductivityFunction productivityFunction = ProductivityFunction.A;
-	
-	// Size of lattice
-	@Parameter int L = 100;
-	
-	RandomEngine rng;
 	Lattice<Site> space;
 	Normal betaDist;
 	
@@ -99,30 +26,6 @@ public class Model implements StochasticModel
 	
 	double lastLifetimeUpdate;
 	EnumMap<State, DoubleW> totalLifetimes;
-	
-	/**
-	 * Enumeration defining the four possible states of sites on the lattice:
-	 * Populated, Agricultural, Forest, and Degraded.
-	 */
-	enum State
-	{
-		Populated(0xFF999999),
-		Agricultural(0xFF804000),
-		Forest(0xFF408000),
-		Degraded(0xFF800000);
-		
-		int color;
-		
-		State(int color)
-		{
-			this.color = color;
-		}
-		
-		public int color()
-		{
-			return color;
-		}
-	}
 	
 	/**
 	 * Implements behavior for sites on the LxL lattice.
@@ -176,7 +79,7 @@ public class Model implements StochasticModel
 			{
 				assert(state == State.Populated);
 				double nA = getNeighborCount(State.Agricultural);
-				return 1.0 - nA/(nA + c);
+				return 1.0 - nA/(nA + config.c);
 			}
 		}
 
@@ -195,7 +98,7 @@ public class Model implements StochasticModel
 			{
 				assert(state == State.Agricultural);
 				
-				if(deltaF)
+				if(config.deltaF)
 				{
 					int nP = 0;
 					int nF = 0;
@@ -215,10 +118,10 @@ public class Model implements StochasticModel
 					
 					if(nP == 0) return 1.0;
 					
-					double nFq = pow(nF, q);
-					return 1.0 -  nFq/(nFq + m);
+					double nFq = pow(nF, config.q);
+					return 1.0 -  nFq/(nFq + config.m);
 				}
-				else return delta;
+				else return config.delta;
 			}
 		}
 
@@ -280,7 +183,7 @@ public class Model implements StochasticModel
 						{
 							if(siteA.state == State.Agricultural)
 							{
-								switch(productivityFunction)
+								switch(config.productivityFunction)
 								{
 									case A:
 										agriculturalProductivity += 1.0;
@@ -291,7 +194,7 @@ public class Model implements StochasticModel
 								}
 							}
 						}
-						double alpha = (1.0 - globalFraction) * agriculturalProductivity/(agriculturalProductivity + r);
+						double alpha = (1.0 - config.globalFraction) * agriculturalProductivity/(agriculturalProductivity + config.r);
 						alphas.put(siteP, alpha);
 						alphaTotal += alpha;
 					}
@@ -317,14 +220,14 @@ public class Model implements StochasticModel
 			{
 				assert(state == State.Degraded);
 				
-				if(epsF)
+				if(config.epsF)
 				{
 					double nF = getNeighborCount(State.Forest);
-					return eps * nF / 8.0;
+					return config.eps * nF / 8.0;
 					
 				}
 				else
-					return eps;
+					return config.eps;
 			}
 		}
 		
@@ -351,8 +254,8 @@ public class Model implements StochasticModel
 					Site site;
 					do
 					{
-						int row = unif.nextIntFromTo(0, L-1);
-						int col = unif.nextIntFromTo(0, L-1);
+						int row = unif.nextIntFromTo(0, config.L-1);
+						int col = unif.nextIntFromTo(0, config.L-1);
 						site = space.get(row, col);
 					} while(site.state != State.Forest && site.state != State.Degraded);
 					
@@ -370,7 +273,7 @@ public class Model implements StochasticModel
 				{
 					if(siteA.state == State.Agricultural)
 					{
-						switch(productivityFunction)
+						switch(config.productivityFunction)
 						{
 							case A:
 								agriculturalProductivity += 1.0;
@@ -381,7 +284,7 @@ public class Model implements StochasticModel
 						}
 					}
 				}
-				return globalFraction * agriculturalProductivity/(agriculturalProductivity + r);
+				return config.globalFraction * agriculturalProductivity/(agriculturalProductivity + config.r);
 			}
 		}
 		
@@ -397,7 +300,7 @@ public class Model implements StochasticModel
 				double oldBeta = beta;
 				beta += betaDist.nextDouble();
 				if(beta < 0) beta = 0;
-				else if(beta > 1) beta = 1;
+				//else if(beta > 1) beta = 1;
 				betaSum += beta - oldBeta;
 				
 				for(Site site : getNeighbors())
@@ -412,7 +315,7 @@ public class Model implements StochasticModel
 			public double getRate()
 			{
 				assert(state == State.Populated);
-				return mu;
+				return config.mu;
 			}
 		}
 		
@@ -477,7 +380,7 @@ public class Model implements StochasticModel
 		{
 			addEvent(new PDEvent());
 			addEvent(new BetaChangeEvent());
-			if(globalFraction > 0.0)
+			if(config.globalFraction > 0.0)
 				addEvent(new GlobalDFPEvent());
 		}
 
@@ -489,7 +392,7 @@ public class Model implements StochasticModel
 		void setUpEventsForest()
 		{
 			addEvent(new FAEvent());
-			if(globalFraction < 1.0)
+			if(config.globalFraction < 1.0)
 				addEvent(new DFPEvent());
 		}
 		
@@ -497,7 +400,7 @@ public class Model implements StochasticModel
 		{
 			addEvent(new DFEvent());
 			
-			if(useDP && globalFraction < 1.0)
+			if(config.useDP && config.globalFraction < 1.0)
 				addEvent(new DFPEvent());
 		}
 		
@@ -537,11 +440,11 @@ public class Model implements StochasticModel
 						break;
 					case Forest:
 						events.add(site.getEvent(FAEvent.class));
-						if(globalFraction < 1.0)
+						if(config.globalFraction < 1.0)
 							events.add(site.getEvent(DFPEvent.class));
 						break;
 					case Degraded:
-						if(useDP && globalFraction < 1.0)
+						if(config.useDP && config.globalFraction < 1.0)
 							events.add(site.getEvent(DFPEvent.class));
 						break;
 				}
@@ -554,12 +457,12 @@ public class Model implements StochasticModel
 			{
 				if(site.state == State.Populated)
 				{
-					if(globalFraction > 0.0)
+					if(config.globalFraction > 0.0)
 						events.add(site.getEvent(GlobalDFPEvent.class));
 					
 					events.add(site.getEvent(PDEvent.class));
 					
-					if(useDP && globalFraction < 1.0)
+					if(config.useDP && config.globalFraction < 1.0)
 					{
 						for(Site site2 : site.getNeighbors())
 						{
@@ -579,15 +482,15 @@ public class Model implements StochasticModel
 				{
 					events.add(site.getEvent(ADEvent.class));
 					
-					if(productivityFunction == ProductivityFunction.AF)
+					if(config.productivityFunction == Config.ProductivityFunction.AF)
 					{
 						for(Site site2 : site.getNeighbors())
 							if(site2.state == State.Populated)
 							{
-								if(globalFraction > 0.0)
+								if(config.globalFraction > 0.0)
 									events.add(site2.getEvent(GlobalDFPEvent.class));
 								
-								if(useDP && globalFraction < 1.0)
+								if(config.useDP && config.globalFraction < 1.0)
 								{
 									for(Site site3 : site2.getNeighbors())
 										if(site3.state == State.Degraded || site3.state == State.Forest)
@@ -596,7 +499,7 @@ public class Model implements StochasticModel
 							}
 					}
 				}
-				else if(epsF && site.state == State.Degraded)
+				else if(config.epsF && site.state == State.Degraded)
 				{
 					events.add(site.getEvent(DFEvent.class));
 				}
@@ -661,10 +564,9 @@ public class Model implements StochasticModel
 	 * Constructor. Simply records the rng: other initialization happens in initialize().
 	 * @param rng
 	 */
-	public Model(RandomEngine rng, int rs)
+	public SpatialModel(RandomEngine rng, Config config)
 	{
-		this.rng = rng;
-		this.randomSeed = rs;
+		super(rng, config);
 	}
 	
 	/**
@@ -675,18 +577,18 @@ public class Model implements StochasticModel
 	public void initialize()
 	{
 		betaDist = new Normal(0, 0.01, rng);
-		space = new Lattice<Site>(L, L, BoundaryCondition.Periodic, NeighborhoodType.Moore);
-		int initPopLoc = L/2;
+		space = new Lattice<Site>(config.L, config.L, BoundaryCondition.Periodic, NeighborhoodType.Moore);
+		int initPopLoc = config.L/2;
 		
-		for(int row = 0; row < L; row++)
+		for(int row = 0; row < config.L; row++)
 		{
-			for(int col = 0; col < L; col++)
+			for(int col = 0; col < config.L; col++)
 			{
 				Site site;
 				if(row == initPopLoc && col == initPopLoc)
 				{
 					site = new Site(State.Populated, row, col);
-					site.beta = beta0;
+					site.beta = config.beta0;
 				}
 				else
 				{
@@ -696,7 +598,7 @@ public class Model implements StochasticModel
 				space.put(site, row, col);
 			}
 		}
-		betaSum = beta0;
+		betaSum = config.beta0;
 		
 		lastLifetimeUpdate = 0;
 		totalLifetimes = new EnumMap<State, DoubleW>(State.class);
@@ -708,7 +610,7 @@ public class Model implements StochasticModel
 		stateCounts = new EnumMap<State, IntW>(State.class);
 		stateCounts.put(State.Populated, new IntW(1));
 		stateCounts.put(State.Agricultural, new IntW(0));
-		stateCounts.put(State.Forest, new IntW(L*L - 1));
+		stateCounts.put(State.Forest, new IntW(config.L*config.L - 1));
 		stateCounts.put(State.Degraded, new IntW(0));
 	}
 	
@@ -732,6 +634,7 @@ public class Model implements StochasticModel
 		return numPop == 0 ? 0.0 : betaSum / numPop;
 	}
 	
+	@Override
 	void updateLifetimes(double time)
 	{
 		// Update lifetimes
@@ -743,6 +646,7 @@ public class Model implements StochasticModel
 		lastLifetimeUpdate = time;
 	}
 	
+	@Override
 	double getAvgLifetime(State state)
 	{
 		return totalLifetimes.get(state).value / stateCounts.get(state).value;
@@ -758,9 +662,9 @@ public class Model implements StochasticModel
 	{
 		ArrayList<Event> events = new ArrayList<Event>();
 		
-		for(int row = 0; row < L; row++)
+		for(int row = 0; row < config.L; row++)
 		{
-			for(int col = 0; col < L; col++)
+			for(int col = 0; col < config.L; col++)
 			{
 				Site site = space.get(row, col);
 				events.addAll(site.activeEvents.values());

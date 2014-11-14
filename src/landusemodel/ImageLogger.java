@@ -1,32 +1,34 @@
-package conservation;
+package landusemodel;
 
 import java.awt.image.BufferedImage;
 import java.io.*;
 
 import javax.imageio.ImageIO;
 
-import conservation.Model.Site;
 
 import jstoch.logging.*;
 import jstoch.model.*;
+import landusemodel.SpatialModel.Site;
 
 public class ImageLogger implements Logger
 {
+	private Config config;
 	private BufferedImage image;
-	private Model model;
+	private SpatialModel model;
 	
 	long logCount = 0;
 	
-	public ImageLogger(Model model)
+	public ImageLogger(Config config, SpatialModel model)
 	{
+		this.config = config;
 		this.model = model;
 	}
 
 	public void logStart(StochasticModel ignore) throws LoggingException
 	{
-		image = new BufferedImage(model.L, model.L, BufferedImage.TYPE_INT_ARGB);
-		for(int row = 0; row < model.L; row++)
-			for(int col = 0; col < model.L; col++)
+		image = new BufferedImage(config.L, config.L, BufferedImage.TYPE_INT_ARGB);
+		for(int row = 0; row < config.L; row++)
+			for(int col = 0; col < config.L; col++)
 				image.setRGB(row, col, model.space.get(row, col).state.color());
 	}
 
@@ -36,7 +38,7 @@ public class ImageLogger implements Logger
 	
 	public double getNextLogTime(StochasticModel ignore) throws LoggingException
 	{
-		return logCount * model.imageInterval;
+		return logCount * config.imageInterval;
 	}
 
 	public void logPeriodic(StochasticModel ignore, double time)
@@ -62,10 +64,10 @@ public class ImageLogger implements Logger
 	void writeImage(double time) throws LoggingException
 	{
 		String filename;
-		if(model.runNum == null)
+		if(config.runNum == null)
 			filename = String.format("image.%04.0f.png", time);
 		else
-			filename = String.format("image.%d.%04.0f.png", model.runNum, time);
+			filename = String.format("image.%d.%04.0f.png", config.runNum, time);
 			
 		// Write image
 		try

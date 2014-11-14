@@ -1,22 +1,23 @@
-package conservation;
+package landusemodel;
 
 import java.io.*;
 
-import conservation.Model.State;
 
 import jstoch.logging.*;
 import jstoch.model.*;
-import jstoch.parameters.Parameters;
+import landusemodel.SuperModel.State;
 
 public class TextLogger implements PeriodicLogger
 {
-	private Model model;
+	private Config config;
+	private SuperModel model;
 	private PrintStream data;
 	
 	long logCount = 0;
 	
-	public TextLogger(Model model)
+	public TextLogger(Config config, SuperModel model)
 	{
+		this.config = config;
 		this.model = model;
 	}
 	
@@ -26,10 +27,10 @@ public class TextLogger implements PeriodicLogger
 		try
 		{
 			String filename;
-			if(model.runNum == null)
+			if(config.runNum == null)
 				filename = "output.txt";
 			else
-				filename = String.format("output.%d.txt", model.runNum);
+				filename = String.format("output.%d.txt", config.runNum);
 			
 			File file = new File(filename);
 			data = new PrintStream(file);
@@ -38,24 +39,6 @@ public class TextLogger implements PeriodicLogger
 		catch(Exception e)
 		{
 			throw new LoggingException(this, e);
-		}
-		
-		// Write parameters file
-		try
-		{
-			String filename;
-			if(model.runNum == null)
-				filename = "params.txt";
-			else
-				filename = String.format("params.%d.txt", model.runNum);
-			
-			PrintStream paramsStream = new PrintStream(filename);
-			Parameters.printParameters(model, paramsStream);
-			paramsStream.close();
-		}
-		catch(Exception e)
-		{
-			throw new LoggingException((PeriodicLogger)model, e);
 		}
 		
 	}
@@ -67,7 +50,7 @@ public class TextLogger implements PeriodicLogger
 	
 	public double getNextLogTime(StochasticModel ignore) throws LoggingException
 	{
-		return logCount * model.logInterval;
+		return logCount * config.logInterval;
 	}
 
 	public void logPeriodic(StochasticModel ignore, double time)
