@@ -44,7 +44,6 @@ public class ImageLogger implements Logger
 	public void logPeriodic(StochasticModel ignore, double time)
 			throws LoggingException
 	{
-		model.updateLifetimes(time);
 		writeImage(time);
 		
 		logCount++;

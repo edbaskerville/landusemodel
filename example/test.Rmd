@@ -1,0 +1,68 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(jsonlite)
+```
+
+```{r}
+config <- fromJSON('config.json')
+```
+
+```{r}
+state_changes <- read.csv('state_changes.csv')
+```
+
+```{r}
+time <- 0:config$maxTime
+P <- array(as.numeric(NA), dim = c(config$L, config$L, length(time)))
+beta <- array(as.numeric(NA), dim = c(config$L, config$L, length(time)))
+
+{
+  P_now <- matrix(as.numeric(NA), nrow = config$L, ncol = config$L)
+  beta_now <- matrix(as.numeric(NA), nrow = config$L, ncol = config$L)
+  time_next <- 0
+  for(i in 1:nrow(state_changes)) {
+    time_now <- state_changes$time[i]
+    
+    while(time_now > time_next) {
+      P[,,time_next + 1] <- P_now
+      beta[,,time_next + 1] <- beta_now
+      time_next <- time_next + 1
+    }
+    
+    row <- state_changes$row[i] + 1
+    col <- state_changes$col[i] + 1
+    P_now[row, col] <- state_changes$P[i]
+    beta_now[row, col] <- state_changes$beta[i]
+  }
+  P[,,length(time)] <- P_now
+  beta[,,length(time)] <- beta_now
+}
+```
+
+## P at end
+
+```{r}
+image(P[,,length(time)], col = gray.colors(2))
+```
+
+## beta at end
+
+```{r}
+image(beta[,,length(time)], col = hcl.colors(256))
+```
+
+```{r}
+summary(as.numeric(beta[,,length(time)]))
+```
+
+
+```{r}
+hist(beta[,,length(time)])
+```
+
+
+

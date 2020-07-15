@@ -6,10 +6,19 @@ public class Config {
 	
 	double globalFraction = 0.0;
 	double maxTime = 10000;
-	boolean outputImages = true;
+
+	boolean outputStateChanges = false;
+	boolean outputImages = false;
+	boolean outputFullState = false;
+
+	// Full state output interval
+	double stateChangeInterval = 1.0;
 	
 	// Image output interval
-	double imageInterval = 1000.0;
+	double imageInterval = 1.0;
+
+	// Full state output interval
+	double fullStateInterval = 1.0;
 	
 	// Logging interval
 	double logInterval = 1.0;
