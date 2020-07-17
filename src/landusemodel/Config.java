@@ -4,7 +4,7 @@ public class Config {
 	boolean spatial = true;
 	Integer randomSeed = null;
 	
-	double globalFraction = 0.0;
+	double k = 0.0;
 	double maxTime = 10000;
 
 	boolean outputStateChanges = false;
@@ -26,7 +26,7 @@ public class Config {
 	Integer runNum = null;
 	
 	// Beta evolution rate
-	double mu = 0.2;
+	double sigma = 0.2;
 	
 	// Parameter controlling P->D rate
 	double c = 0.01;
@@ -43,11 +43,11 @@ public class Config {
 	double q = 1;
 	
 	// Parameter controlling D->F rate
-	double eps = 0.3;
+	double epsilon = 0.3;
 	
 	// If epsF == true, the D->F rate depends on the fraction
 	// of forested neighbors.
-	boolean epsF = false;
+	boolean epsilonF = false;
 	
 	// F->A rate of initial individual
 	double beta0 = 1.0;

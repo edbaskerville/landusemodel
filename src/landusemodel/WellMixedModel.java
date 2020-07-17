@@ -88,7 +88,7 @@ class WellMixedModel extends SuperModel
 			dependenciesF.add(adEvent);
 		dependenciesF.add(faEvent);
 		dependenciesF.add(fpEvent);
-		if(config.epsF)
+		if(config.epsilonF)
 			dependenciesF.add(dfEvent);
 		
 		dependenciesD = new ArrayList<Event>();
@@ -312,12 +312,12 @@ class WellMixedModel extends SuperModel
 		@Override
 		public double getRate()
 		{
-			if(config.epsF)
+			if(config.epsilonF)
 			{
-				return config.eps * D * F / N;
+				return config.epsilon * D * F / N;
 			}
 			else
-				return config.eps * D;
+				return config.epsilon * D;
 		}
 
 		@Override
@@ -337,7 +337,7 @@ class WellMixedModel extends SuperModel
 		@Override
 		public double getRate()
 		{
-			return config.mu * P;
+			return config.sigma * P;
 		}
 
 		@Override

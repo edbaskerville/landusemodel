@@ -195,7 +195,7 @@ public class SpatialModel extends SuperModel
 							}
 						}
 						agriculturalProductivity /= 8.0;
-						double alpha = (1.0 - config.globalFraction) * agriculturalProductivity/(agriculturalProductivity + config.r);
+						double alpha = (1.0 - config.k) * agriculturalProductivity/(agriculturalProductivity + config.r);
 						alphas.put(siteP, alpha);
 						alphaTotal += alpha;
 					}
@@ -221,14 +221,14 @@ public class SpatialModel extends SuperModel
 			{
 				assert(state == State.Degraded);
 				
-				if(config.epsF)
+				if(config.epsilonF)
 				{
 					double nF = getNeighborCount(State.Forest);
-					return config.eps * nF / 8.0;
+					return config.epsilon * nF / 8.0;
 					
 				}
 				else
-					return config.eps;
+					return config.epsilon;
 			}
 		}
 		
@@ -285,7 +285,7 @@ public class SpatialModel extends SuperModel
 						}
 					}
 				}
-				return config.globalFraction * agriculturalProductivity/(agriculturalProductivity + config.r);
+				return config.k * agriculturalProductivity/(agriculturalProductivity + config.r);
 			}
 		}
 		
@@ -316,7 +316,7 @@ public class SpatialModel extends SuperModel
 			public double getRate()
 			{
 				assert(state == State.Populated);
-				return config.mu;
+				return config.sigma;
 			}
 		}
 		
@@ -381,7 +381,7 @@ public class SpatialModel extends SuperModel
 		{
 			addEvent(new PDEvent());
 			addEvent(new BetaChangeEvent());
-			if(config.globalFraction > 0.0)
+			if(config.k > 0.0)
 				addEvent(new GlobalDFPEvent());
 		}
 
@@ -393,7 +393,7 @@ public class SpatialModel extends SuperModel
 		void setUpEventsForest()
 		{
 			addEvent(new FAEvent());
-			if(config.globalFraction < 1.0)
+			if(config.k < 1.0)
 				addEvent(new DFPEvent());
 		}
 		
@@ -401,7 +401,7 @@ public class SpatialModel extends SuperModel
 		{
 			addEvent(new DFEvent());
 			
-			if(config.useDP && config.globalFraction < 1.0)
+			if(config.useDP && config.k < 1.0)
 				addEvent(new DFPEvent());
 		}
 		
@@ -441,11 +441,11 @@ public class SpatialModel extends SuperModel
 						break;
 					case Forest:
 						events.add(site.getEvent(FAEvent.class));
-						if(config.globalFraction < 1.0)
+						if(config.k < 1.0)
 							events.add(site.getEvent(DFPEvent.class));
 						break;
 					case Degraded:
-						if(config.useDP && config.globalFraction < 1.0)
+						if(config.useDP && config.k < 1.0)
 							events.add(site.getEvent(DFPEvent.class));
 						break;
 				}
@@ -458,12 +458,12 @@ public class SpatialModel extends SuperModel
 			{
 				if(site.state == State.Populated)
 				{
-					if(config.globalFraction > 0.0)
+					if(config.k > 0.0)
 						events.add(site.getEvent(GlobalDFPEvent.class));
 					
 					events.add(site.getEvent(PDEvent.class));
 					
-					if(config.useDP && config.globalFraction < 1.0)
+					if(config.useDP && config.k < 1.0)
 					{
 						for(Site site2 : site.getNeighbors())
 						{
@@ -488,10 +488,10 @@ public class SpatialModel extends SuperModel
 						for(Site site2 : site.getNeighbors())
 							if(site2.state == State.Populated)
 							{
-								if(config.globalFraction > 0.0)
+								if(config.k > 0.0)
 									events.add(site2.getEvent(GlobalDFPEvent.class));
 								
-								if(config.useDP && config.globalFraction < 1.0)
+								if(config.useDP && config.k < 1.0)
 								{
 									for(Site site3 : site2.getNeighbors())
 										if(site3.state == State.Degraded || site3.state == State.Forest)
@@ -500,7 +500,7 @@ public class SpatialModel extends SuperModel
 							}
 					}
 				}
-				else if(config.epsF && site.state == State.Degraded)
+				else if(config.epsilonF && site.state == State.Degraded)
 				{
 					events.add(site.getEvent(DFEvent.class));
 				}
