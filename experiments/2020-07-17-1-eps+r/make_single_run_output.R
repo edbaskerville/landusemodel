@@ -7,40 +7,43 @@ library(tidyr)
 library(stringr)
 
 main <- function() {
-  stopifnot(!file.exists('summary.Rds'))
+  stopifnot(!file.exists('output.Rds'))
+  
+  # Read quantities generated over time within simulation
+  output_table <- read.csv('output.csv')
   
   config <- fromJSON('config.json')
   state_changes <- read.csv('state_changes.csv')
   
-  # Compute P, beta over time
-  result <- construct_P_beta_over_time(config, state_changes)
+  # Compute H, beta over time
+  result <- construct_H_beta_over_time(config, state_changes, max(output_table$time))
   time <- result$time
-  P <- result$P
+  H <- result$H
   beta <- result$beta
   
   # Get summary statistics at each time point
-  summary <- bind_rows(lapply(1:length(time), function(i) {
-    summarize_at_time(time[i], P[,,i], beta[,,i])
+  H_beta_summary <- bind_rows(lapply(1:length(time), function(i) {
+    summarize_at_time(time[i], H[,,i], beta[,,i])
   }))
   
-  # Add rows from output.txt
-  
-  
-  saveRDS(summary, 'summary.Rds')
+  saveRDS(
+    output_table %>% left_join(H_beta_summary, by = 'time'),
+    'output.Rds'
+  )
 }
 
-construct_P_beta_over_time <- function(config, state_changes) {
+construct_H_beta_over_time <- function(config, state_changes, last_output_time) {
   L <- config$L
   
-  time <- 0:config$maxTime
+  time <- 0:last_output_time
   
-  # Initialize L x L x (maxTime + 1) arrays to contain P, beta over time
-  P <- array(as.numeric(NA), dim = c(L, L, length(time)))
+  # Initialize L x L x (maxTime + 1) arrays to contain H, beta over time
+  H <- array(as.numeric(NA), dim = c(L, L, length(time)))
   beta <- array(as.numeric(NA), dim = c(L, L, length(time)))
   
-  # Initialize LxL matrices for current P, beta 
+  # Initialize LxL matrices for current H, beta 
   # in which to accumulate state changes
-  P_now <- matrix(as.numeric(NA), nrow = L, ncol = L)
+  H_now <- matrix(as.numeric(NA), nrow = L, ncol = L)
   beta_now <- matrix(as.numeric(NA), nrow = L, ncol = L)
   
   # Process each state change sequentially
@@ -49,39 +52,38 @@ construct_P_beta_over_time <- function(config, state_changes) {
     time_now <- state_changes$time[i]
     
     # If the state change is past one or more unrecorded timesteps,
-    # we need to copy P_now, beta_now into those timesteps before absorbing
+    # we need to copy H_now, beta_now into those timesteps before absorbing
     # the new change
     while(time_now > time_next) {
-      P[,,time_next + 1] <- P_now
+      H[,,time_next + 1] <- H_now
       beta[,,time_next + 1] <- beta_now
       time_next <- time_next + 1
     }
     
-    # Finally, modify P_now and beta_now according to the state change
+    # Finally, modify H_now and beta_now according to the state change
     row <- state_changes$row[i] + 1
     col <- state_changes$col[i] + 1
-    P_now[row, col] <- state_changes$P[i]
+    H_now[row, col] <- state_changes$P[i]
     beta_now[row, col] <- state_changes$beta[i]
   }
   
   # Record the last state
-  P[,,length(time)] <- P_now
+  H[,,length(time)] <- H_now
   beta[,,length(time)] <- beta_now
   
   list(
     time = time,
-    P = P,
+    H = H,
     beta = beta
   )
 }
 
-summarize_at_time <- function(time, P, beta) {
+summarize_at_time <- function(time, H, beta) {
   beta_vec <- as.numeric(beta)
   
   # Simple stuff
   row <- data.frame(
     time = time,
-    n_P = sum(P),
     beta_mean = mean(beta_vec, na.rm = TRUE),
     beta_sd = sd(beta_vec, na.rm = TRUE)
   )

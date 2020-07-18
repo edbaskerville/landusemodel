@@ -28,13 +28,13 @@ public class TextLogger implements PeriodicLogger
 		{
 			String filename;
 			if(config.runNum == null)
-				filename = "output.txt";
+				filename = "output.csv";
 			else
-				filename = String.format("output.%d.txt", config.runNum);
+				filename = String.format("output.%d.csv", config.runNum);
 			
 			File file = new File(filename);
 			data = new PrintStream(file);
-			data.printf("%%t\tbeta\tP\t(avg. life)\tA\t(avg. life)\tF\t(avg. life)\tD\t(avg. life)\n");
+			data.printf("time,beta,H,H_lifetime_avg,A,A_lifetime_avg,F,F_lifetime_avg,D,D_lifetime_avg\n");
 		}
 		catch(Exception e)
 		{
@@ -58,7 +58,7 @@ public class TextLogger implements PeriodicLogger
 	{
 		model.updateLifetimes(time);
 		
-		data.printf("%04.0f\t%01.4f\t%d\t%f\t%d\t%f\t%d\t%f\t%d\t%f\n",
+		data.printf("%f,%f,%d,%f,%d,%f,%d,%f,%d,%f\n",
 				time,
 				model.getBetaMean(),
 				model.getCount(State.Populated),
