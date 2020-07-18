@@ -4,7 +4,6 @@ library(jsonlite)
 library(dplyr)
 library(tidyr)
 library(stringr)
-library(purrr)
 library(DBI)
 library(RSQLite)
 
@@ -149,7 +148,7 @@ write_submit_script <- function(runs, filename) {
   )
   
   # Make script executable
-  system('chmod +x submit.sh')
+  system(str_glue('chmod +x {filename}'))
 }
 
 main()
