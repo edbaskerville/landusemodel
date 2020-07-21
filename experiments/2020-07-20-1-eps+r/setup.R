@@ -45,12 +45,15 @@ BASE_CONFIG <- list(
 ROOT_PATH <- normalizePath(file.path('..', '..'))
 RUN_EXEC_PATH <- file.path(ROOT_PATH, 'run.sh')
 MAKE_OUTPUT_PATH <- normalizePath('make_single_run_output.R')
+STATE_CHANGES_TO_SQLITE_PATH <- normalizePath('state_changes_to_sqlite.py')
 
 # Template for script to perform a single run
 RUN_SCRIPT_TEMPLATE = '#!/bin/bash
 {RUN_EXEC_PATH} config.json
+python3 {STATE_CHANGES_TO_SQLITE_PATH}
 Rscript {MAKE_OUTPUT_PATH} || exit 1
 rm state_changes.csv
+rm state_changes.sqlite
 '
 
 # Template for job script

@@ -4,6 +4,8 @@ library(jsonlite)
 library(dplyr)
 library(tidyr)
 library(stringr)
+library(DBI)
+library(RSQLite)
 
 main <- function() {
   stopifnot(!file.exists('output.Rds'))
@@ -11,69 +13,34 @@ main <- function() {
   # Read quantities generated over time within simulation
   output_table <- read.csv('output.csv')
   
+  last_output_time <- max(output_table$time)
+  
   config <- fromJSON('config.json')
-  state_changes <- read.csv('state_changes.csv')
+  L <- config$L
+  db_conn <- dbConnect(SQLite(), 'state_changes.sqlite')
   
-  # Compute H, beta over time
-  result <- construct_H_beta_over_time(config, state_changes, max(output_table$time))
-  time <- result$time
-  H <- result$H
-  beta <- result$beta
+  H <- matrix(as.numeric(NA), nrow = L, ncol = L)
+  beta <- matrix(as.numeric(NA), nrow = L, ncol = L)
   
-  # Get summary statistics at each time point
-  H_beta_summary <- bind_rows(lapply(1:length(time), function(i) {
-    summarize_at_time(time[i], H[,,i], beta[,,i])
+  # For each timestep, update H and beta from state changes and compute statistics
+  H_beta_summary <- bind_rows(lapply(0:last_output_time, function(time) {
+    last_time <- time - 1
+    state_changes <- dbGetQuery(
+      db_conn,
+      str_glue('SELECT * FROM state_changes WHERE time > {last_time} AND time <= {time}')
+    )
+    for(i in 1:nrow(state_changes)) {
+      row <- state_changes$row[i] + 1
+      col <- state_changes$col[i] + 1
+      H[row, col] <- state_changes$P[i]
+      beta[row, col] <- state_changes$beta[i]
+    }
+    summarize_at_time(time, H, beta)
   }))
   
   saveRDS(
     output_table %>% left_join(H_beta_summary, by = 'time'),
     'output.Rds'
-  )
-}
-
-construct_H_beta_over_time <- function(config, state_changes, last_output_time) {
-  L <- config$L
-  
-  time <- 0:last_output_time
-  
-  # Initialize L x L x (maxTime + 1) arrays to contain H, beta over time
-  H <- array(as.numeric(NA), dim = c(L, L, length(time)))
-  beta <- array(as.numeric(NA), dim = c(L, L, length(time)))
-  
-  # Initialize LxL matrices for current H, beta 
-  # in which to accumulate state changes
-  H_now <- matrix(as.numeric(NA), nrow = L, ncol = L)
-  beta_now <- matrix(as.numeric(NA), nrow = L, ncol = L)
-  
-  # Process each state change sequentially
-  time_next <- 0
-  for(i in 1:nrow(state_changes)) {
-    time_now <- state_changes$time[i]
-    
-    # If the state change is past one or more unrecorded timesteps,
-    # we need to copy H_now, beta_now into those timesteps before absorbing
-    # the new change
-    while(time_now > time_next) {
-      H[,,time_next + 1] <- H_now
-      beta[,,time_next + 1] <- beta_now
-      time_next <- time_next + 1
-    }
-    
-    # Finally, modify H_now and beta_now according to the state change
-    row <- state_changes$row[i] + 1
-    col <- state_changes$col[i] + 1
-    H_now[row, col] <- state_changes$P[i]
-    beta_now[row, col] <- state_changes$beta[i]
-  }
-  
-  # Record the last state
-  H[,,length(time)] <- H_now
-  beta[,,length(time)] <- beta_now
-  
-  list(
-    time = time,
-    H = H,
-    beta = beta
   )
 }
 

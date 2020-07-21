@@ -81,7 +81,7 @@ public class StateChangeLogger implements jstoch.logging.EventLogger
 		}
 		else {
 			stream.printf(
-					"%f,%d,%d,%s,NA\n",
+					"%f,%d,%d,%s,\n",
 					time, row, col, 0
 			);
 		}
