@@ -12,7 +12,7 @@ N_REPLICATES <- 10
 PARAM_VALS <- list(
   productivityFunction = c('A', 'AF'),
   epsilon = seq(0, 10, 1),
-  r = seq(0.05, 0.50, 0.05),
+  r = seq(0.01, 0.1, 0.01),
   replicate_id = 1:N_REPLICATES
 )
 
@@ -52,6 +52,7 @@ JOB_SCRIPT_TEMPLATE <- '#!/bin/bash
 #SBATCH --account=pi-pascualmm
 #SBATCH --partition=broadwl
 
+#SBATCH --chdir={run_path}
 #SBATCH --output=stdout.txt
 #SBATCH --error=stderr.txt
 #SBATCH --nodes=1
@@ -107,7 +108,7 @@ set_up_run <- function(run_row) {
   print(run_row)
   
   run_id <- run_row$run_id
-  run_path <- file.path('runs', sprintf('%d', run_id))
+  run_path <- file.path(normalizePath('runs'), str_glue('{run_id}'))
   dir.create(run_path)
   
   # Assign parameters for config.json
@@ -135,10 +136,9 @@ write_submit_script <- function(runs, filename) {
       '#!/bin/sh',
       str_flatten(
         sapply(runs$run_id, function(run_id) {
-          run_path <- normalizePath(file.path(
-            'runs', str_glue('{run_id}'), 'run.sbatch'
-          ))
-          str_glue('sbatch {run_path}')
+	  run_path <- normalizePath(file.path('runs', str_glue('{run_id}')))
+          sbatch_path <- file.path(run_path, 'run.sbatch')
+          str_glue('sbatch {sbatch_path}')
         }),
         collapse = '\n'
       ),
