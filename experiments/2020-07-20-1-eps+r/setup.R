@@ -7,12 +7,14 @@ library(stringr)
 library(DBI)
 library(RSQLite)
 
-N_REPLICATES <- 1
+N_JOBS <- 500
+
+N_REPLICATES <- 10
 
 PARAM_VALS <- list(
   productivityFunction = c('A', 'AF'),
-  epsilon = seq(0, 6, 0.2),
-  r = seq(0.01, 0.2, 0.01),
+  epsilon = seq(0, 10, 1),
+  r = seq(0.05, 0.5, 0.05),
   replicate_id = 1:N_REPLICATES
 )
 
@@ -21,14 +23,13 @@ BASE_CONFIG <- list(
   epsilon = 3,
   q = 6,
   m = 0.01,
-  r = 0.1,
   c = 0.001,
   k = 0.0,
   productivityFunction = 'AF',
   
   spatial = TRUE,
   maxTime = 10000.0,
-  outputStateChanges = FALSE,
+  outputStateChanges = TRUE,
   outputImages = FALSE,
   outputFullState = FALSE,
   logInterval = 1.0,
@@ -43,32 +44,47 @@ BASE_CONFIG <- list(
 
 ROOT_PATH <- normalizePath(file.path('..', '..'))
 RUN_EXEC_PATH <- file.path(ROOT_PATH, 'run.sh')
-#MAKE_OUTPUT_PATH <- normalizePath('make_single_run_output.R')
+MAKE_OUTPUT_PATH <- normalizePath('make_single_run_output.R')
+
+# Template for script to perform a single run
+RUN_SCRIPT_TEMPLATE = '#!/bin/bash
+{RUN_EXEC_PATH} config.json
+Rscript {MAKE_OUTPUT_PATH} || exit 1
+rm state_changes.csv
+'
 
 # Template for job script
 JOB_SCRIPT_TEMPLATE <- '#!/bin/bash
 
-#SBATCH --job-name=LUM-1-{run_id}
+#SBATCH --job-name=LUM-{job_id}
 
 #SBATCH --account=pi-pascualmm
 #SBATCH --partition=broadwl
 
-#SBATCH --chdir={run_path}
-#SBATCH --output=stdout.txt
-#SBATCH --error=stderr.txt
+#SBATCH --time={n_runs}:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
+#SBATCH --mem-per-cpu=2000
 
-{RUN_EXEC_PATH} config.json
-#Rscript {{MAKE_OUTPUT_PATH}} || exit 1
-#rm state_changes.csv
+#SBATCH --chdir={job_path}
+#SBATCH --output=stdout.txt
+#SBATCH --error=stderr.txt
+
+for i in {{{run_id_start}..{run_id_end}}}
+do
+  echo "Run $i"
+  cd {runs_path}/$i
+  bash run.sh
+done
 '
 
 main <- function() {
   stopifnot(!dir.exists('runs'))
+  stopifnot(!dir.exists('jobs'))
   stopifnot(!file.exists('db.sqlite'))
   
   dir.create('runs')
+  dir.create('jobs')
   
   # Create table containing parameter values for each run
   runs <- {
@@ -87,9 +103,17 @@ main <- function() {
     set_up_run(runs[i,])
   }
   
-  # Create a script to sequentially submit each run to SLURM
-  write_submit_script(runs %>% filter(replicate_id == 1), 'submit_first.sh')
-  write_submit_script(runs %>% filter(replicate_id > 1), 'submit_rest.sh')
+  # Split up the runs among a maximum of N_JOBS jobs
+  n_jobs <- min(nrow(runs), N_JOBS)
+  n_runs_by_job <- distribute_evenly(nrow(runs), n_jobs)
+  run_id_start <- c(0, cumsum(n_runs_by_job))[1:n_jobs] + 1
+  run_id_end <- cumsum(n_runs_by_job)
+  for(i in 1:n_jobs) {
+    write_job_script(i, run_id_start[i], run_id_end[i])
+  }
+  
+  # Create a script to submit all the jobs to SLURM
+  write_submit_script(n_jobs, 'submit.sh')
 }
 
 make_parameter_row <- function(run_num, param_index, value_01) {
@@ -125,20 +149,37 @@ set_up_run <- function(run_row) {
   )
   
   # Write run script
+  run_script_path <- file.path(run_path, 'run.sh')
   write(
-    str_glue(JOB_SCRIPT_TEMPLATE),
-    file.path(run_path, 'run.sbatch')
+    str_glue(RUN_SCRIPT_TEMPLATE),
+    file.path(run_path, 'run.sh')
   )
+  system(str_glue('chmod +x {run_script_path}'))
 }
 
-write_submit_script <- function(runs, filename) {
+write_job_script <- function(job_id, run_id_start, run_id_end) {
+  jobs_path <- normalizePath('jobs')
+  runs_path <- normalizePath('runs')
+  job_path <- file.path(jobs_path, str_glue('{job_id}'))
+  dir.create(job_path)
+  
+  n_runs <- run_id_end - run_id_start + 1
+  job_script_path <- file.path(job_path, 'job.sbatch')
+  write(
+    str_glue(JOB_SCRIPT_TEMPLATE),
+    job_script_path
+  )
+  system(str_glue('chmod +x {job_script_path}'))
+}
+
+write_submit_script <- function(n_jobs, filename) {
   write(
     str_glue(
       '#!/bin/sh',
       str_flatten(
-        sapply(runs$run_id, function(run_id) {
-	  run_path <- normalizePath(file.path('runs', str_glue('{run_id}')))
-          sbatch_path <- file.path(run_path, 'run.sbatch')
+        sapply(1:n_jobs, function(job_id) {
+          job_path <- normalizePath(file.path('jobs', str_glue('{job_id}')))
+          sbatch_path <- file.path(job_path, 'job.sbatch')
           str_glue('sbatch {sbatch_path}')
         }),
         collapse = '\n'
@@ -150,6 +191,17 @@ write_submit_script <- function(runs, filename) {
   
   # Make script executable
   system(str_glue('chmod +x {filename}'))
+}
+
+distribute_evenly <- function(n, k) {
+  a <- rep(n %/% k, k)
+  r <- n %% k
+  if(r > 0) {
+    a[1:r] <- a[1:r] + 1
+  }
+  stopifnot(all(a >= (n %/% k)))
+  stopifnot(sum(a) == n)
+  a
 }
 
 main()
