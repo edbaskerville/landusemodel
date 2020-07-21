@@ -70,7 +70,7 @@ JOB_SCRIPT_TEMPLATE <- '#!/bin/bash
 #SBATCH --output=stdout.txt
 #SBATCH --error=stderr.txt
 
-for i in {{{run_id_start}..{run_id_end}}}
+for i in {run_ids_str}
 do
   echo "Run $i"
   cd {runs_path}/$i
@@ -80,11 +80,11 @@ done
 
 main <- function() {
   stopifnot(!dir.exists('runs'))
-  stopifnot(!dir.exists('jobs'))
+  stopifnot(!dir.exists('jobs_first'))
+  stopifnot(!dir.exists('jobs_rest'))
   stopifnot(!file.exists('db.sqlite'))
   
   dir.create('runs')
-  dir.create('jobs')
   
   # Create table containing parameter values for each run
   runs <- {
@@ -103,17 +103,20 @@ main <- function() {
     set_up_run(runs[i,])
   }
   
-  # Split up the runs among a maximum of N_JOBS jobs
-  n_jobs <- min(nrow(runs), N_JOBS)
-  n_runs_by_job <- distribute_evenly(nrow(runs), n_jobs)
-  run_id_start <- c(0, cumsum(n_runs_by_job))[1:n_jobs] + 1
-  run_id_end <- cumsum(n_runs_by_job)
-  for(i in 1:n_jobs) {
-    write_job_script(i, run_id_start[i], run_id_end[i])
-  }
+  # Create a set of SLURM jobs for the first replicate of each parameter combo
+  # for the sake of initial testing and debugging across parameter space
+  n_jobs_first <- set_up_jobs(
+    runs %>% filter(replicate_id == 1),
+    'jobs_first', 1, 'submit_first.sh'
+  )
   
-  # Create a script to submit all the jobs to SLURM
-  write_submit_script(n_jobs, 'submit.sh')
+  # Create another set of SLURM jobs for the remaining replicates
+  if(N_REPLICATES > 1) {
+    set_up_jobs(
+      runs %>% filter(replicate_id > 1),
+      'jobs_rest', n_jobs_first + 1, 'submit_rest.sh'
+    )
+  }
 }
 
 make_parameter_row <- function(run_num, param_index, value_01) {
@@ -157,13 +160,40 @@ set_up_run <- function(run_row) {
   system(str_glue('chmod +x {run_script_path}'))
 }
 
-write_job_script <- function(job_id, run_id_start, run_id_end) {
-  jobs_path <- normalizePath('jobs')
+set_up_jobs <- function(runs, jobs_path, job_id_start, submit_filename) {
+  print('set up jobs')
+  
+  dir.create(jobs_path)
+  jobs_path <- normalizePath(jobs_path)
+  
+  # Split up the runs among a maximum of N_JOBS jobs
+  n_jobs <- min(nrow(runs), N_JOBS)
+  n_runs_by_job <- distribute_evenly(nrow(runs), n_jobs)
+  
+  run_start <- c(0, cumsum(n_runs_by_job))[1:n_jobs] + 1
+  run_end <- cumsum(n_runs_by_job)
+  
+  for(i in 1:n_jobs) {
+    cat(sprintf('job %d\n', i))
+    write_job_script(jobs_path, job_id_start + i - 1, runs$run_id[run_start[i]:run_end[i]])
+  }
+  
+  write_submit_script(
+    jobs_path, job_id_start, job_id_start + n_jobs - 1,
+    submit_filename
+  )
+  
+  n_jobs
+}
+
+write_job_script <- function(jobs_path, job_id, run_ids) {
+  n_runs <- length(run_ids)
   runs_path <- normalizePath('runs')
+  
   job_path <- file.path(jobs_path, str_glue('{job_id}'))
   dir.create(job_path)
   
-  n_runs <- run_id_end - run_id_start + 1
+  run_ids_str <- str_flatten(run_ids, collapse = ' ')
   job_script_path <- file.path(job_path, 'job.sbatch')
   write(
     str_glue(JOB_SCRIPT_TEMPLATE),
@@ -172,20 +202,19 @@ write_job_script <- function(job_id, run_id_start, run_id_end) {
   system(str_glue('chmod +x {job_script_path}'))
 }
 
-write_submit_script <- function(n_jobs, filename) {
+# Template for submit script
+SUBMIT_SCRIPT_TEMPLATE <- '#!/bin/bash
+for job_id in {{{job_id_start}..{job_id_end}}}
+do
+  sbatch {jobs_path}/$job_id/job.sbatch
+done
+'
+
+write_submit_script <- function(jobs_path, job_id_start, job_id_end, filename) {
+  print('write_submit_script')
+  
   write(
-    str_glue(
-      '#!/bin/sh',
-      str_flatten(
-        sapply(1:n_jobs, function(job_id) {
-          job_path <- normalizePath(file.path('jobs', str_glue('{job_id}')))
-          sbatch_path <- file.path(job_path, 'job.sbatch')
-          str_glue('sbatch {sbatch_path}')
-        }),
-        collapse = '\n'
-      ),
-      .sep = '\n'
-    ),
+    str_glue(SUBMIT_SCRIPT_TEMPLATE),
     filename
   )
   
