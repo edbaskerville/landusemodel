@@ -8,6 +8,7 @@ library(DBI)
 library(RSQLite)
 
 N_JOBS <- 500
+HOURS_PER_RUN <- 6
 
 N_REPLICATES <- 10
 
@@ -64,7 +65,7 @@ JOB_SCRIPT_TEMPLATE <- '#!/bin/bash
 #SBATCH --account=pi-pascualmm
 #SBATCH --partition=broadwl
 
-#SBATCH --time={n_runs}:00:00
+#SBATCH --time={time_hours}:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-cpu=2000
@@ -198,6 +199,7 @@ write_job_script <- function(jobs_path, job_id, run_ids) {
   
   run_ids_str <- str_flatten(run_ids, collapse = ' ')
   job_script_path <- file.path(job_path, 'job.sbatch')
+  time_hours <- n_runs * HOURS_PER_RUN
   write(
     str_glue(JOB_SCRIPT_TEMPLATE),
     job_script_path
