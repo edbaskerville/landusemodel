@@ -1,0 +1,59 @@
+---
+title: "Do a simple plot from the summary output"
+output: html_notebook
+---
+
+```{r}
+library(DBI)
+library(RSQLite)
+library(dplyr)
+library(ggplot2)
+```
+
+## Basic setup
+
+This assumes that `summary.sqlite` has already been created by running `example-summary.Rmd`.
+
+First, connect to the database:
+
+```{r}
+stopifnot(file.exists('summary.sqlite'))
+db_conn <- dbConnect(SQLite(), 'summary.sqlite')
+```
+
+Get the full summary table:
+
+```{r}
+summary <- tbl(db_conn, 'summary') %>% collect()
+head(summary, 5)
+```
+
+## Make a plot
+
+Let's plot mean `H_mean` as a heatmap of `epsilon` and `r`, faceted by `productivityFunction`.
+
+First, make a summary of summary that's averaged across replicates for each parameter combination:
+
+```{r}
+summary_by_params <- summary %>%
+  group_by(productivityFunction, epsilon, r) %>%
+  summarize(H_mean_mean = mean(H_mean)) %>%
+  ungroup()
+head(summary_by_params, 5)
+```
+
+Now make the plot:
+
+```{r}
+ggplot(summary_by_params, aes(x = epsilon, y = r, fill = H_mean_mean)) +
+  geom_tile() +
+  facet_grid(cols = vars(productivityFunction))
+```
+
+Clear as mud.
+
+## Clean up
+
+```{r}
+dbDisonnect(db_conn)
+```
