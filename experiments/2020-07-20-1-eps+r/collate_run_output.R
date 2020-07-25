@@ -18,7 +18,9 @@ main <- function() {
   for(run_id in run_ids) {
     output <- load_output(run_id)
     if(!is.null(output)) {
+      cat(sprintf('Collating run id %d\n', run_id))
       dbAppendTable(db_conn, 'output', output)
+      gc()
     }
   }
   dbDisconnect(db_conn)
