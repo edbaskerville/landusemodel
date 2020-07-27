@@ -81,6 +81,7 @@ parallel -j {n_cores} < runs.sh
 
 main <- function() {
   stopifnot(!dir.exists('runs'))
+  stopifnot(!dir.exists('jobs'))
   stopifnot(!dir.exists('jobs_first'))
   stopifnot(!dir.exists('jobs_rest'))
   stopifnot(!file.exists('db.sqlite'))
@@ -106,30 +107,21 @@ main <- function() {
   
   # Create a set of SLURM jobs for the first replicate of each parameter combo
   # for the sake of initial testing and debugging across parameter space
-  n_jobs_first <- set_up_jobs(
-    runs %>% filter(replicate_id == 1),
-    'jobs_first', 1, 'submit_first.sh'
-  )
+  #n_jobs_first <- set_up_jobs(
+  #  runs %>% filter(replicate_id == 1),
+  #  'jobs_first', 1, 'submit_first.sh'
+  #)
   
   # Create another set of SLURM jobs for the remaining replicates
-  if(N_REPLICATES > 1) {
-    set_up_jobs(
-      runs %>% filter(replicate_id > 1),
-      'jobs_rest', n_jobs_first + 1, 'submit_rest.sh'
-    )
-  }
-}
+  #if(N_REPLICATES > 1) {
+  #  set_up_jobs(
+  #    runs %>% filter(replicate_id > 1),
+  #    'jobs_rest', n_jobs_first + 1, 'submit_rest.sh'
+  #  )
+  #}
 
-make_parameter_row <- function(run_num, param_index, value_01) {
-  param_name <- names(LHS_PARAMS)[param_index]
-  param_range <- LHS_PARAMS[[param_index]]
-  param_min <- param_range[1]
-  param_max <- param_range[2]
-  
-  tibble(
-    run = run_num,
-    name = param_name,
-    value = param_min + (param_max - param_min) * value_01
+  set_up_jobs(
+    runs, 'jobs', 1, 'submit.sh'
   )
 }
 
@@ -198,12 +190,11 @@ write_job_script <- function(jobs_path, job_id, run_ids) {
   
   run_ids_str <- str_flatten(run_ids, collapse = ' ')
   
-  runs_path <- file.path(job_path, 'runs.sh')
   write(
     str_flatten(sapply(run_ids, function(run_id) {
       str_glue('cd {runs_path}/{run_id}; ./run.sh 2> stderr.txt 1> stdout.txt')
     }), collapse = '\n'),
-    runs_path
+    file.path(job_path, 'runs.sh')
   )
   
   job_script_path <- file.path(job_path, 'job.sbatch')
