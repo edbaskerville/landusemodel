@@ -8,8 +8,8 @@ library(DBI)
 library(RSQLite)
 
 N_JOBS <- 100
-MAX_CORES_PER_JOB <- 14
-HOURS_PER_RUN <- 6
+MAX_CORES_PER_JOB <- 28
+HOURS_PER_RUN <- 24
 
 N_REPLICATES <- 10
 
@@ -30,7 +30,7 @@ BASE_CONFIG <- list(
   productivityFunction = 'AF',
   
   spatial = TRUE,
-  maxTime = 1000.0,
+  maxTime = 10000.0,
   outputStateChanges = TRUE,
   outputImages = FALSE,
   outputFullState = FALSE,
@@ -107,22 +107,22 @@ main <- function() {
   
   # Create a set of SLURM jobs for the first replicate of each parameter combo
   # for the sake of initial testing and debugging across parameter space
-  n_jobs_first <- set_up_jobs(
-   runs %>% filter(replicate_id == 1),
-   'jobs_first', 1, 'submit_first.sh'
-  )
+  #n_jobs_first <- set_up_jobs(
+  # runs %>% filter(replicate_id == 1),
+  # 'jobs_first', 1, 'submit_first.sh'
+  #)
   
   # Create another set of SLURM jobs for the remaining replicates
-  if(N_REPLICATES > 1) {
-   set_up_jobs(
-     runs %>% filter(replicate_id > 1),
-     'jobs_rest', n_jobs_first + 1, 'submit_rest.sh'
-   )
-  }
+  #if(N_REPLICATES > 1) {
+  # set_up_jobs(
+  #   runs %>% filter(replicate_id > 1),
+  #   'jobs_rest', n_jobs_first + 1, 'submit_rest.sh'
+  # )
+  #}
 
-#   set_up_jobs(
-#     runs, 'jobs', 1, 'submit.sh'
-#   )
+   set_up_jobs(
+     runs, 'jobs', 1, 'submit.sh'
+   )
 }
 
 set_up_run <- function(run_row) {
@@ -199,7 +199,7 @@ write_job_script <- function(jobs_path, job_id, run_ids) {
   
   job_script_path <- file.path(job_path, 'job.sbatch')
   n_cores <- min(n_runs, MAX_CORES_PER_JOB)
-  time_hours <- ceiling(n_runs * HOURS_PER_RUN / n_cores)
+  time_hours <- HOURS_PER_RUN * ceiling(n_runs / n_cores)
   write(
     str_glue(JOB_SCRIPT_TEMPLATE),
     job_script_path
