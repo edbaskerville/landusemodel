@@ -7,6 +7,7 @@ import jstoch.model.Event;
 import jstoch.model.StochasticModel;
 import landusemodel.SpatialModel.Site;
 import landusemodel.SuperModel.State;
+import static landusemodel.Util.*;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -35,8 +36,7 @@ public class StateChangeLogger implements jstoch.logging.EventLogger
 			else
 				filename = String.format("state_changes.%d.csv", config.runNum);
 
-			File file = new File(filename);
-			stream = new PrintStream(file);
+			stream = openBufferedPrintStream(filename);
 			stream.printf("time,row,col,P,beta\n");
 		}
 		catch(Exception e)

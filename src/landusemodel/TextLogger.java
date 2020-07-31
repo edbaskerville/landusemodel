@@ -6,12 +6,13 @@ import java.io.*;
 import jstoch.logging.*;
 import jstoch.model.*;
 import landusemodel.SuperModel.State;
+import static landusemodel.Util.*;
 
 public class TextLogger implements PeriodicLogger
 {
 	private Config config;
 	private SuperModel model;
-	private PrintStream data;
+	private PrintStream stream;
 	
 	long logCount = 0;
 	
@@ -31,10 +32,10 @@ public class TextLogger implements PeriodicLogger
 				filename = "output.csv";
 			else
 				filename = String.format("output.%d.csv", config.runNum);
-			
-			File file = new File(filename);
-			data = new PrintStream(file);
-			data.printf("time,beta,H,H_lifetime_avg,A,A_lifetime_avg,F,F_lifetime_avg,D,D_lifetime_avg\n");
+
+			stream = openBufferedPrintStream(filename);
+			stream.printf("time,beta,H,H_lifetime_avg,A,A_lifetime_avg,F,F_lifetime_avg,D,D_lifetime_avg\n");
+			stream.flush();
 		}
 		catch(Exception e)
 		{
@@ -45,7 +46,7 @@ public class TextLogger implements PeriodicLogger
 
 	public void logEnd(StochasticModel ignore) throws LoggingException
 	{
-		data.close();
+		stream.close();
 	}
 	
 	public double getNextLogTime(StochasticModel ignore) throws LoggingException
@@ -58,7 +59,7 @@ public class TextLogger implements PeriodicLogger
 	{
 		model.updateLifetimes(time);
 		
-		data.printf("%f,%f,%d,%f,%d,%f,%d,%f,%d,%f\n",
+		stream.printf("%f,%f,%d,%f,%d,%f,%d,%f,%d,%f\n",
 				time,
 				model.getBetaMean(),
 				model.getCount(State.Populated),
@@ -69,6 +70,7 @@ public class TextLogger implements PeriodicLogger
 				model.getAvgLifetime(State.Forest),
 				model.getCount(State.Degraded),
 				model.getAvgLifetime(State.Degraded));
+		stream.flush();
 		
 		logCount++;
 	}

@@ -4,3 +4,8 @@
 *.png
 *.html
 *.Rds
+submit*.sh
+runs
+jobs
+jobs_first
+jobs_rest
