@@ -1,14 +1,11 @@
 package landusemodel;
 
-import jstoch.logging.EventLogger;
-import jstoch.logging.Logger;
 import jstoch.logging.LoggingException;
 import jstoch.logging.PeriodicLogger;
-import jstoch.model.Event;
 import jstoch.model.StochasticModel;
 import landusemodel.SpatialModel.Site;
+import static landusemodel.Util.*;
 
-import javax.imageio.ImageIO;
 import java.io.File;
 import java.io.PrintStream;
 
@@ -16,7 +13,7 @@ public class FullStateLogger implements PeriodicLogger
 {
 	private Config config;
 	private SpatialModel model;
-	private PrintStream data;
+	private PrintStream stream;
 
 	long logCount = 0;
 
@@ -36,9 +33,8 @@ public class FullStateLogger implements PeriodicLogger
 			else
 				filename = String.format("full_state.%d.csv", config.runNum);
 
-			File file = new File(filename);
-			data = new PrintStream(file);
-			data.printf("time,row,col,birthTime,state,beta\n");
+			stream = openBufferedPrintStream(filename);
+			stream.printf("time,row,col,birthTime,state,beta\n");
 		}
 		catch(Exception e)
 		{
@@ -48,7 +44,7 @@ public class FullStateLogger implements PeriodicLogger
 
 	public void logEnd(StochasticModel ignore) throws LoggingException
 	{
-		data.close();
+		stream.close();
 	}
 	
 	public double getNextLogTime(StochasticModel ignore) throws LoggingException
@@ -69,7 +65,7 @@ public class FullStateLogger implements PeriodicLogger
 		for(int row = 0; row < config.L; row++) {
 			for(int col = 0; col < config.L; col++) {
 				Site site = model.space.get(row, col);
-				data.printf(
+				stream.printf(
 					"%f,%d,%d,%f,%s,%f\n",
 					time, row, col, site.birthTime, site.state.toString(), site.beta
 				);
