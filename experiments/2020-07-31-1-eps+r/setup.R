@@ -52,7 +52,7 @@ STATE_CHANGES_TO_SQLITE_PATH <- normalizePath('state_changes_to_sqlite.py')
 # Template for script to perform a single run
 RUN_SCRIPT_TEMPLATE = '#!/bin/bash
 
-set -e
+# set -e
 
 RUN_DIR={run_dir}
 
@@ -71,14 +71,16 @@ fi
 {RUN_EXEC_PATH} config.json
 python3 {STATE_CHANGES_TO_SQLITE_PATH}
 Rscript {MAKE_OUTPUT_PATH}
-rm output.csv
-rm state_changes.csv
-rm state_changes.sqlite
 
 # If on cluster, copy files back to main storage from SLURM_TMPDIR
 if [[ "$SLURM_TMPDIR" ]]; then
   cd "$RUN_DIR"
-  cp "$SLURM_TMPDIR/{run_id}"/*.* .
+  mkdir tmp
+  cp "$SLURM_TMPDIR/{run_id}"/parameters_out.json .
+  cp "$SLURM_TMPDIR/{run_id}"/output.sqlite .
+  cp "$SLURM_TMPDIR/{run_id}"/*.json tmp
+  cp "$SLURM_TMPDIR/{run_id}"/*.csv tmp
+  cp "$SLURM_TMPDIR/{run_id}"/*.txt tmp
 fi
 '
 
