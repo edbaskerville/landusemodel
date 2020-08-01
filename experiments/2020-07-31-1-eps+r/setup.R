@@ -49,57 +49,6 @@ RUN_EXEC_PATH <- file.path(ROOT_PATH, 'run.sh')
 MAKE_OUTPUT_PATH <- normalizePath('make_single_run_output.R')
 STATE_CHANGES_TO_SQLITE_PATH <- normalizePath('state_changes_to_sqlite.py')
 
-# Template for script to perform a single run
-RUN_SCRIPT_TEMPLATE = '#!/bin/bash
-
-set -e
-
-RUN_DIR={run_dir}
-
-# Copy and cd to SLURM_TMPDIR if running on cluster
-# Otherwise just cd to the run directory
-echo $SLURM_TMPDIR
-if [[ $SLURM_TMPDIR ]]; then
-  mkdir "$SLURM_TMPDIR/{run_id}"
-  cp "$RUN_DIR"/*.* "$SLURM_TMPDIR/{run_id}"
-  cd "$SLURM_TMPDIR/{run_id}"
-else
-  cd "$RUN_DIR"
-fi
-
-# Actually run things
-{RUN_EXEC_PATH} config.json
-python3 {STATE_CHANGES_TO_SQLITE_PATH}
-Rscript {MAKE_OUTPUT_PATH}
-
-# If on cluster, copy files back to main storage from SLURM_TMPDIR
-if [[ "$SLURM_TMPDIR" ]]; then
-  cd "$RUN_DIR"
-  cp "$SLURM_TMPDIR/{run_id}"/parameters_out.json .
-  cp "$SLURM_TMPDIR/{run_id}"/output.sqlite .
-fi
-'
-
-# Template for job script
-JOB_SCRIPT_TEMPLATE <- '#!/bin/bash
-
-#SBATCH --job-name=LUM-{job_id}
-
-#SBATCH --account=pi-pascualmm
-#SBATCH --partition=broadwl
-
-#SBATCH --time={time_hours}:00:00
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node={n_cores}
-#SBATCH --mem-per-cpu=2000
-
-#SBATCH --chdir={job_path}
-#SBATCH --output=stdout.txt
-#SBATCH --error=stderr.txt
-
-parallel -j {n_cores} < runs.sh
-'
-
 main <- function() {
   stopifnot(!dir.exists('runs'))
   stopifnot(!dir.exists('jobs'))
@@ -146,6 +95,48 @@ main <- function() {
 #   )
 }
 
+
+# Wrapper for srun wrapper script to handle failures
+
+SRUN_WRAPPER_TEMPLATE = '#!/bin/bash
+
+cd {run_dir}
+./run.sh 2> stderr.txt 1> stdout.txt || cp -r "$SLURM_TMPDIR/{run_id}" ./tmp
+'
+
+
+# Template for script to perform a single run
+RUN_SCRIPT_TEMPLATE = '#!/bin/bash
+
+set -e
+
+RUN_ID={run_id}
+RUN_DIR={run_dir}
+TMP_DIR="$SLURM_TMPDIR/$RUN_ID"
+
+# Copy and cd to SLURM_TMPDIR if running on cluster
+# Otherwise just cd to the run directory
+echo $SLURM_TMPDIR
+if [[ $SLURM_TMPDIR ]]; then
+  mkdir "$TMP_DIR"
+  cd "$TMP_DIR"
+else
+  cd "$RUN_DIR"
+fi
+
+# Actually run things
+{RUN_EXEC_PATH} $RUN_DIR/config.json
+python3 {STATE_CHANGES_TO_SQLITE_PATH}
+Rscript {MAKE_OUTPUT_PATH}
+
+# If on cluster, copy files back to main storage from SLURM_TMPDIR
+if [[ "$SLURM_TMPDIR" ]]; then
+  cd "$RUN_DIR"
+  cp "$TMP_DIR"/parameters_out.json .
+  cp "$TMP_DIR"/output.sqlite .
+fi
+'
+
 set_up_run <- function(run_row) {
   print(run_row)
   
@@ -166,11 +157,19 @@ set_up_run <- function(run_row) {
     file.path(run_dir, 'config.json')
   )
   
+  # Write srun wrapper script
+  srun_wrapper_path <- file.path(run_dir, 'srun_wrapper.sh')
+  write(
+    str_glue(SRUN_WRAPPER_TEMPLATE),
+    srun_wrapper_path
+  )
+  system(str_glue('chmod +x {srun_wrapper_path}'))
+  
   # Write run script
   run_script_path <- file.path(run_dir, 'run.sh')
   write(
     str_glue(RUN_SCRIPT_TEMPLATE),
-    file.path(run_dir, 'run.sh')
+    run_script_path
   )
   system(str_glue('chmod +x {run_script_path}'))
 }
@@ -202,6 +201,31 @@ set_up_jobs <- function(runs, jobs_path, job_id_start, submit_filename) {
   n_jobs
 }
 
+# Template for job script
+JOB_SCRIPT_TEMPLATE <- '#!/bin/bash
+
+#SBATCH --job-name=LUM-{job_id}
+
+#SBATCH --account=pi-pascualmm
+#SBATCH --partition=broadwl
+
+#SBATCH --time={time_hours}:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node={n_cores}
+#SBATCH --mem-per-cpu=2000
+
+#SBATCH --chdir={job_path}
+#SBATCH --output=stdout.txt
+#SBATCH --error=stderr.txt
+
+module load parallel
+module load java/11.0.1
+module load R/3.6.1
+module load python/3.7.0
+
+parallel --delay 0.2 -j $SLURM_NTASKS --joblog runlog.txt --resume < runs.sh
+'
+
 write_job_script <- function(jobs_path, job_id, run_ids) {
   n_runs <- length(run_ids)
   runs_path <- normalizePath('runs')
@@ -213,7 +237,7 @@ write_job_script <- function(jobs_path, job_id, run_ids) {
   
   write(
     str_flatten(sapply(run_ids, function(run_id) {
-      str_glue('cd {runs_path}/{run_id}; ./run.sh 2> stderr.txt 1> stdout.txt || cp -r "$SLURM_TMPDIR/{run_id}" ./tmp')
+      str_glue('srun --exclusive -N1 -n1 {runs_path}/{run_id}/srun_wrapper.sh')
     }), collapse = '\n'),
     file.path(job_path, 'runs.sh')
   )
