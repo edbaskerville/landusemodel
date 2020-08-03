@@ -99,7 +99,7 @@ public class TextLogger implements PeriodicLogger {
 
 		}
 
-		stream.flush();
+//		stream.flush();
 
 		logCount++;
 	}
