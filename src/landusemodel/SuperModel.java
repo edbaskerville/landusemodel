@@ -30,10 +30,11 @@ public abstract class SuperModel implements StochasticModel
 	}
 	
 
-	abstract double getBetaMean();
 	abstract int getCount(State state);
 	abstract double getAvgLifetime(State state);
 	abstract void updateLifetimes(double time);
+
+	abstract double[] getSortedBetas();
 	
 	protected RandomEngine rng;
 	protected Config config;

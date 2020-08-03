@@ -48,16 +48,8 @@ public class Main
 		Simulator sim = new GillespieDirectSimulator(model, rng);
 		if(config.spatial)
 		{
-			if(config.outputStateChanges) {
-				sim.addEventLogger(new StateChangeLogger(config, (SpatialModel) model));
-			}
-
 			if(config.outputImages) {
 				sim.addLogger(new ImageLogger(config, (SpatialModel) model));
-			}
-
-			if(config.outputFullState) {
-				sim.addPeriodicLogger(new FullStateLogger(config, (SpatialModel) model));
 			}
 		}
 		

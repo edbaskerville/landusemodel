@@ -20,8 +20,6 @@ public class SpatialModel extends SuperModel
 	Lattice<Site> space;
 	Normal betaDist;
 	
-	double betaSum;
-	
 	EnumMap<State, IntW> stateCounts;
 	
 	double lastLifetimeUpdate;
@@ -72,7 +70,6 @@ public class SpatialModel extends SuperModel
 					Set<Event> eventsToUpdate)
 			{
 				performStateChange(time, State.Populated, State.Degraded, eventsToRemove, eventsToUpdate);
-				betaSum -= beta;
 			}
 			
 			public double getRate()
@@ -165,7 +162,6 @@ public class SpatialModel extends SuperModel
 				performStateChange(time, state, State.Populated, eventsToRemove, eventsToUpdate);
 				
 				beta = populatedNeighbors.nextValue().beta;
-				betaSum += beta;
 				populatedNeighbors = null;
 			}
 			
@@ -262,7 +258,6 @@ public class SpatialModel extends SuperModel
 					
 					site.performStateChange(time, site.state, State.Populated, eventsToRemove, eventsToUpdate);
 					site.beta = beta;
-					betaSum += beta;
 				}
 			}
 			
@@ -302,7 +297,6 @@ public class SpatialModel extends SuperModel
 				beta += betaDist.nextDouble();
 				if(beta < 0) beta = 0;
 				//else if(beta > 1) beta = 1;
-				betaSum += beta - oldBeta;
 				
 				for(Site site : getNeighbors())
 				{
@@ -599,7 +593,6 @@ public class SpatialModel extends SuperModel
 				space.put(site, row, col);
 			}
 		}
-		betaSum = config.beta0;
 		
 		lastLifetimeUpdate = 0;
 		totalLifetimes = new EnumMap<State, DoubleW>(State.class);
@@ -623,16 +616,6 @@ public class SpatialModel extends SuperModel
 	public int getCount(State state)
 	{
 		return stateCounts.get(state).value;
-	}
-	
-	/**
-	 * Calculates the average value of beta across all populated sites.
-	 * @return The average value of beta, or zero if there are no populated sites.
-	 */
-	public double getBetaMean()
-	{
-		int numPop = getCount(State.Populated);
-		return numPop == 0 ? 0.0 : betaSum / numPop;
 	}
 	
 	@Override
@@ -673,5 +656,24 @@ public class SpatialModel extends SuperModel
 		}
 		
 		return events;
+	}
+
+	@Override
+	double[] getSortedBetas() {
+		double betas[] = new double[getCount(State.Populated)];
+
+		int i = 0;
+		for(int row = 0; row < config.L; row++) {
+			for (int col = 0; col < config.L; col++) {
+				SpatialModel.Site site = space.get(row, col);
+				if(site.state == State.Populated) {
+					betas[i] = site.beta;
+					i++;
+				}
+			}
+		}
+
+		Arrays.sort(betas);
+		return betas;
 	}
 }

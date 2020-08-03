@@ -9,6 +9,8 @@ import cern.jet.random.engine.RandomEngine;
 import jstoch.model.Event;
 import jstoch.model.SimulationException;
 
+import static landusemodel.Util.*;
+
 class WellMixedModel extends SuperModel
 {
 	Uniform unif;
@@ -118,9 +120,11 @@ class WellMixedModel extends SuperModel
 	}
 
 	@Override
-	double getBetaMean()
+	double[] getSortedBetas()
 	{
-		return P == 0 ? 0 : betaSum / P;
+		double[] sortedBetas = toArray(betas);
+		Arrays.sort(sortedBetas);
+		return sortedBetas;
 	}
 
 	@Override
