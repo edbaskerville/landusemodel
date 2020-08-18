@@ -22,19 +22,17 @@ PARAM_VALS <- list(
 
 # Starting point for run config.json files
 BASE_CONFIG <- list(
-  epsilon = 3,
-  q = 6,
-  m = 0.01,
+  #epsilon = 3,
+  q = 1,
+  m = 0.1,
   c = 0.001,
   k = 0.0,
-  r = 0.05,
+  #r = 0.05,
   productivityFunction = 'AF',
   
   spatial = TRUE,
   maxTime = 10000.0,
-  outputStateChanges = TRUE,
   outputImages = FALSE,
-  outputFullState = FALSE,
   logInterval = 1.0,
   sigma = 0.2,
   deltaF = TRUE,
