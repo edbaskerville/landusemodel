@@ -27,6 +27,7 @@ BASE_CONFIG <- list(
   m = 0.01,
   c = 0.001,
   k = 0.0,
+  r = 0.05,
   productivityFunction = 'AF',
   
   spatial = TRUE,
