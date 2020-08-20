@@ -22,7 +22,7 @@ PARAM_VALS <- list(
 
 # Starting point for run config.json files
 BASE_CONFIG <- list(
-  #epsilon = 3,
+  epsilon = 0.5,
   q = 1,
   m = 0.1,
   c = 0.001,
