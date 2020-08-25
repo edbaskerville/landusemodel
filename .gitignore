@@ -9,3 +9,9 @@ runs
 jobs
 jobs_first
 jobs_rest
+bin
+.classpath
+.idea
+.project
+.settings
+*.iml
