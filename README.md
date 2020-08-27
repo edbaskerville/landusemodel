@@ -150,3 +150,87 @@ TODO.
 
 All rates are in the same time units as the output.
 E.g., if these time units are interpreted as being days, then a rate of 1 means that on average an event happens once per day.
+
+
+## Notes for simplified implementation
+
+Can we get away with a combination of grouped, total rates and the rejection method?
+
+The implementation would look like this:
+
+(1) Choose a category of event using a simple weighted sample from an *upper bound* on the total rate for each event.
+(2) Use rejection sampling to either perform the chosen category event or do nothing if the sample is rejected.
+
+### Basic things to track
+
+* **Arrays of sites in each state**: The most useful tracking data structure is an array, one for each state, of sites in that state. This can be maintained fairly efficiently (description TBD)
+
+### Local colonization events (`D -> H`, `F -> H`)
+
+An upper bound on the total local colonization rate is:
+
+```
+(# of sites in state H)
+  * (max number of neighbors in state D or H, 8) * max(alpha)
+```
+
+The correct rate can be achieved via these steps:
+
+1. Randomly sample a site in state H
+2. Randomly sample a neighbor of the site.
+3. If the neighbor is in state D or H, perform a colonization event with probability `alpha / max(alpha)`
+
+### Global colonization events
+
+Global colonization events follow an analogous pattern.
+
+An upper bound on total global colonization rate is
+
+```
+(# of sites in state H) * max(alpha)
+```
+
+To get the correct rate:
+
+1. Randomly sample a site in state H
+2. Randomly sample a site in state D or H somewhere on the lattice
+3. Perform a colonization event with probability `alpha / max(alpha)`
+
+
+### Degradation, abandonment, conversion, recovery events (`X -> Y`)
+
+Simple.
+Total rate = `(# of sites in state X) * (max rate X -> Y)`
+
+1. Randomly sample a site in state `X`
+2. Perform transition with probability `rate / max(rate)`
+
+
+### `beta` evolution events
+
+No rejection necessary.
+
+1. Randomly sample a site in state H
+2. Update `beta` for that site
+
+
+## Some weirdnesses
+
+### Local vs. global colonization rate
+
+TBD think carefully: I don't think this use of `k` actually makes sense.
+It has a weird relationship with the average number of populated neighbors of sites.
+
+### `sigma`
+
+NOTE: better to use `sigma` for the standard deviation of the random walk, not for the rate at which random walk events occur!
+
+NOTE 2: probably better to hard-code the rate rather than hard-coding the standard deviation! (Best to hard-code neither.)
+
+### Rates that saturate to 1
+
+Degradation, abandonment, and colonization rates saturate to `1`, because they were based on probabilities.
+
+That doesn't really make mathematical sense in this framework.
+
+Deal with this?
