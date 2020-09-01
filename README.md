@@ -94,10 +94,6 @@ where
 fq = (n_F(i) / 8)^q
 ```
 
-if it has any populated neighbors.
-
-Otherwise, it is converted to state `D` at rate `1.0`.
-
 NOTE: we have been using `deltaF = true`. Is that what we want?
 
 
