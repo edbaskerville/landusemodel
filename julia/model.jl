@@ -3,13 +3,21 @@ using StatsBase
 
 ### PARAMETERS
 
+@enum ProductivityFunction begin
+    PRODUCTIVITY_A
+    PRODUCTIVITY_AF
+end
+
 mutable struct Parameters
     rng_seed::Union{Int64, Nothing}
     
     L::Int64
     
+    productivity_function::ProductivityFunction
+    
     k::Float64
     r::Float64
+    epsilon::Float64
     
     t_final::Float64
     t_output::Float64
@@ -20,7 +28,9 @@ mutable struct Parameters
         p.rng_seed = nothing
         p.L = 200
         
-        p.k = 0.01
+        p.productivity_function = PRODUCTIVITY_A
+        
+        p.k = 0.0
         p.r = 0.05
         
         p.t_final = 10000
@@ -58,20 +68,23 @@ LocVec = Vector{Loc}
 
 struct Site
     state::Int64
+    by_state_array_index::Int64
     beta::Union{Float64, Nothing}
     
     function Site()
-        Site(0)
+        Site(0, 0)
     end
     
-    function Site(state::Int64)
-        @assert state != H
-        new(state, nothing)
+    function Site(state::Int64, by_state_array_index::Int64)
+        Site(state, by_state_array_index, nothing)
     end
     
-    function Site(state::Int64, beta::Float64)
-        @assert state == H
-        new(H, beta)
+    function Site(state::Int64, by_state_array_index::Int64, beta::Union{Float64, Nothing})
+        if beta === nothing
+            @assert state != H
+        end
+        
+        new(state, by_state_array_index, beta)
     end
 end
 
@@ -115,15 +128,13 @@ function initialize!(s::Simulation)
     
     # Initialize one human site in the center of the grid
     locH = div(L, 2)
-    s.sites[locH, locH] = Site(H, 1.0)
-    push!(s.sites_by_state[H], (locH, locH))
+    set_state!(s, (locH, locH), H, 1.0)
     
     # Initialize every other site as forest 
     for j in 1:L
         for i in 1:L
-            if s.sites[i, j].state == 0
-                s.sites[i, j] = Site(F)
-                push!(s.sites_by_state[F], (i, j))
+            if !(i == locH && j == locH)
+                set_state!(s, (i, j), F)
             end
         end
     end
@@ -136,6 +147,40 @@ end
 
 
 ### SIMULATION CONVENIENCE FUNCTIONS
+
+function get_site(sim::Simulation, loc::Tuple{Int64, Int64})
+    sim.sites[CartesianIndex(loc)]
+end
+
+function get_state(sim::Simulation, loc::Tuple{Int64, Int64})
+    sim.sites[CartesianIndex(loc)].state
+end
+
+function set_state!(sim::Simulation, loc::Tuple{Int64, Int64}, state::Int64)
+    set_state!(sim, loc, state, nothing)
+end
+
+function set_state!(sim::Simulation, loc::Tuple{Int64, Int64}, state::Int64, beta::Union{Float64, Nothing})
+    site_index = CartesianIndex(loc)
+    site = sim.sites[site_index]
+        
+    # Remove from sites_by_state array for old state
+    if site.state != 0 && site.state != state
+        index = site.by_state_array_index
+        swap_with_end_and_remove!(sim.sites_by_state[site.state], index)
+    end
+    
+    # Get index in sites_by_state array (existing or new)
+    by_state_array_index = if site.state == 0 || site.state != state
+        # Add to sites_by_state array for new state
+        push!(sim.sites_by_state[state], loc)
+        lastindex(sim.sites_by_state[state])
+    else
+        site.by_state_array_index
+    end
+    
+    sim.sites[site_index] = Site(state, by_state_array_index, beta)
+end
 
 function state_count(sim::Simulation, state::Int64)
     return length(sim.sites_by_state[state])
@@ -241,35 +286,78 @@ end
 
 ### LOCAL COLONIZATION (F -> H)
 
-function alpha_max(r)
-    return 1.0 / (1.0 + r)
+function alpha_max(s)
+    return 1.0 / (1.0 + s.params.r)
 end
 
 function get_rate_local_FH(s::Simulation)
     p = s.params
     
-    return (1.0 - p.k) * state_count(s, H) * 8.0 * alpha_max(p.r)
+    return (1.0 - p.k) * state_count(s, H) * 8.0 * alpha_max(s)
 end
 
 function do_event_local_FH!(s::Simulation, t)
+    @debug "do_event_local_FH!", t
+    
     p = s.params
+    rng = s.rng
     
     # Draw a random human to do the colonizing
     @assert state_count(s, H) > 0
-    x, y = draw_site_in_state(s, H)
-    @debug "x, y", x, y
+    loc_H = draw_site_in_state(s, H)
+    site_H = get_site(s, loc_H)
+    @debug "loc_H", loc_H
     
-    false
+    # Draw a random neighbor of the inhabited site
+    loc_neighbor = draw_neighbor(s, loc_H)
+    @debug "loc_neighbor", loc_neighbor
+    
+    # If neighbor is in state F, transition to state H
+    @debug "neighbor state" get_state(s, loc_neighbor)
+    if get_state(s, loc_neighbor) == F
+        @debug "neighbor is F"
+        
+        # Perform event with probability alpha / alpha_max (rejection method)
+        if rand(rng) < get_alpha(s, loc_H) / alpha_max(s)
+            @debug "actually doing F -> H"
+            set_state!(s, loc_neighbor, H, site_H.beta)
+            true
+        else
+            @debug "not doing F -> H"
+            false
+        end
+    else
+        false
+    end
+end
+
+function get_alpha(s::Simulation, loc::Tuple{Int64, Int64})
+    a = if s.params.productivity_function == PRODUCTIVITY_A
+        get_productivity_A(s, loc)
+    else
+        get_productivity_AF(s, loc)
+    end
+    
+    a / (a + s.params.r)
+end
+
+function get_productivity_A(s::Simulation, loc::Tuple{Int64, Int64})
+    get_neighbor_count(s, loc, A) / 8.0
+end
+
+function get_productivity_AF(s::Simulation, loc::Tuple{Int64, Int64})
+    @assert false
+    0.0
 end
 
 
 ### GLOBAL COLONIZATION (F -> H)
 
-function get_rate_global_FH(sim)
-    return 0.0
+function get_rate_global_FH(s)
+    return s.params.k * state_count(s, H) * alpha_max(s)
 end
 
-function do_event_global_FH!(sim, t)
+function do_event_global_FH!(s, t)
     false
 end
 
@@ -325,4 +413,60 @@ end
 
 function do_event_beta_change!(sim, t)
     false
+end
+
+
+### UTILITY FUNCTIONS ###
+
+NEIGHBOR_OFFSETS = [
+    (-1, -1),
+    (-1, 0),
+    (-1, 1),
+    (0, -1),
+    (0, 1),
+    (1, -1),
+    (1, 0),
+    (1, 1)
+]
+
+function draw_neighbor(s::Simulation, loc::Tuple{Int64, Int64})
+    offset = rand(s.rng, NEIGHBOR_OFFSETS)
+    apply_offset(loc, offset, s.params.L)
+end
+
+function get_neighbor_count(s::Simulation, loc, state)
+    L = s.params.L
+    count = 0
+    for offset = NEIGHBOR_OFFSETS
+        if get_state(s, apply_offset(loc, offset, L)) == state
+            count += 1
+        end
+    end
+    count
+end
+
+function apply_offset(loc, offset, L)
+    (
+        wrap_coord(loc[1] + offset[1], L),
+        wrap_coord(loc[2] + offset[2], L),
+    )
+end
+
+function wrap_coord(x, L)
+    if x == 0
+        L
+    elseif x == L + 1
+        1
+    else
+        @assert 1 <= x <= L
+        x
+    end
+end
+
+function swap_with_end_and_remove!(a, index)
+    if index != lastindex(a)
+        setindex!(a, a[lastindex(a)], index)
+    end
+    pop!(a)
+    nothing
 end
