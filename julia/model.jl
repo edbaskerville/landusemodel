@@ -1,6 +1,9 @@
+import Base.length
 using Random
 using StatsBase
 using DataStructures: SortedDict
+
+include("util.jl")
 
 ### PARAMETERS
 
@@ -67,46 +70,46 @@ JSON2.@format Parameters noargs
 ### CONSTANTS
 
 # Site states
-const H = 1
-const A = 2
-const F = 3
-const D = 4
+STATES = Vector(1:4)
+const H, A, F, D = STATES
+println(STATES)
+println(length(STATES))
 
 # Events
-const LOCAL_FH = 1
-const GLOBAL_FH = 2
-const AD = 3
-const HD = 4
-const FA = 5
-const DF = 6
-const BETA_CHANGE = 7
-EVENTS = [LOCAL_FH, GLOBAL_FH, AD, HD, FA, DF, BETA_CHANGE]
+EVENTS = Vector(1:7)
+LOCAL_FH, GLOBAL_FH, AD, HD, FA, DF, BETA_CHANGE = EVENTS
+# const LOCAL_FH = 1
+# const GLOBAL_FH = 2
+# const AD = 3
+# const HD = 4
+# const FA = 5
+# const DF = 6
+# const BETA_CHANGE = 7
+# EVENTS = [LOCAL_FH, GLOBAL_FH, AD, HD, FA, DF, BETA_CHANGE]
 
 
 ### SIMULATION STATE AND INITIALIZATION
 
 Loc = Tuple{Int64, Int64}
-LocVec = Vector{Loc}
 
 struct Site
     state::Int64
-    by_state_array_index::Int64
     beta::Union{Float64, Nothing}
     
     function Site()
         Site(0, 0)
     end
     
-    function Site(state::Int64, by_state_array_index::Int64)
-        Site(state, by_state_array_index, nothing)
+    function Site(state::Int64)
+        Site(state, nothing)
     end
     
-    function Site(state::Int64, by_state_array_index::Int64, beta::Union{Float64, Nothing})
+    function Site(state::Int64, beta::Union{Float64, Nothing})
         if beta === nothing
             @assert state != H
         end
         
-        new(state, by_state_array_index, beta)
+        new(state, beta)
     end
 end
 
@@ -116,7 +119,8 @@ mutable struct Simulation
     t::Float64
     
     sites::Matrix{Site}
-    sites_by_state::Vector{LocVec}
+    sites_by_state::Vector{ArraySet{Loc}}
+    
     betas::SortedDict{Float64, Int64}
     
     event_rates::Vector{Float64}
@@ -135,7 +139,7 @@ mutable struct Simulation
         
         s.t = 0.0
         s.sites = Matrix{Site}(undef, p.L, p.L)
-        s.sites_by_state = [ [], [], [], [] ]
+        s.sites_by_state = Vector{ArraySet{Loc}}(length(STATES))
         s.betas = SortedDict{Float64, Int64}()
         
         s.event_rates = repeat([0.0], length(EVENTS))
@@ -215,25 +219,22 @@ function set_state!(s::Simulation, loc::Tuple{Int64, Int64}, state::Int64)
 end
 
 function set_state!(s::Simulation, loc::Tuple{Int64, Int64}, state::Int64, beta::Union{Float64, Nothing})
-    site_index = CartesianIndex(loc)
-    site = s.sites[site_index]
+    @assert state != 0
     
-    # Remove from sites_by_state array for old state
+    loc_index = CartesianIndex(loc)
+    site = s.sites[loc_index]
+    
+    # Remove from sites_by_state set for old state
     if site.state != 0 && site.state != state
-        index = site.by_state_array_index
-        swap_with_end_and_remove!(s.sites_by_state[site.state], index)
+        remove!(s.sites_by_state[site.state], loc)
     end
     
-    # Get index in sites_by_state array, modifying if necessary
-    by_state_array_index = if site.state == 0 || site.state != state
-        # Add to sites_by_state array for new state
-        push!(s.sites_by_state[state], loc)
-        lastindex(s.sites_by_state[state])
-    else
-        site.by_state_array_index
+    # Insert into sites_by_state set for new state
+    if site.state == 0 || site.state != state
+        insert!(s.sites_by_state[state], loc)
     end
     
-    s.sites[site_index] = Site(state, by_state_array_index, beta)
+    s.sites[loc_index] = Site(state, beta)
     
     # Remove old beta from beta tracking structure
     if site.state == H
@@ -615,7 +616,7 @@ function do_event_beta_change!(s, t)
 end
 
 
-### UTILITY FUNCTIONS ###
+### UTILITY FUNCTIONS AND DATA STRUCTURES ###
 
 NEIGHBOR_OFFSETS = [
     (-1, -1),
@@ -660,12 +661,4 @@ function wrap_coord(x, L)
         @assert 1 <= x <= L
         x
     end
-end
-
-function swap_with_end_and_remove!(a, index)
-    if index != lastindex(a)
-        setindex!(a, a[lastindex(a)], index)
-    end
-    pop!(a)
-    nothing
 end
