@@ -21,6 +21,7 @@ mutable struct Parameters
     t_output::Float64
     
     max_rate_FH::Float64
+    frac_global_FH::Float64
     
     max_rate_AD::Float64
     min_rate_frac_AD::Float64
@@ -46,16 +47,17 @@ mutable struct Parameters
         p.t_output = 1.0
         
         p.max_rate_FH = 1.0 / 30.0
+        p.frac_global_FH = 0.05
         
-        p.max_rate_AD = 1.0 / 30.0
+        p.max_rate_AD = 1.0 / 360.0
         p.min_rate_frac_AD = 0.01
         
-        p.max_rate_HD = 1.0 / 30.0
+        p.max_rate_HD = 1.0 / 360.0
         p.min_rate_frac_AD = 0.01
         
         p.rate_DF = 1.0 / 360.0
         
-        p.beta_initial = 1.0 / 30.0
+        p.beta_initial = 1.0 / 10.0
         p.sd_log_beta = 1.0 / 300
         p.rate_beta_change = 1.0
         
@@ -358,12 +360,12 @@ function do_event!(event_id, s::Simulation, t::Float64)
 end
 
 
-### LOCAL COLONIZATION (F -> H) ###
+### COLONIZATION (F -> H) ###
 
 function get_rate_local_FH(s::Simulation)
     p = s.params
     
-    return state_count(s, F) * p.max_rate_FH
+    return (1.0 - p.frac_global_FH) * state_count(s, F) * p.max_rate_FH
 end
 
 function do_event_local_FH!(s::Simulation, t)
@@ -388,7 +390,7 @@ function do_event_local_FH!(s::Simulation, t)
         
         # Perform event with probability that depends on neighbors of H
         if rand(rng) < probability_FH(s, loc_neighbor)
-            @debug "actually doing F -> H"
+            @info "actually doing local F -> H"
             set_state!(s, loc_F, H, get_site(s, loc_neighbor).beta)
             true
         else
@@ -396,6 +398,40 @@ function do_event_local_FH!(s::Simulation, t)
             false
         end
     else
+        false
+    end
+end
+
+function get_rate_global_FH(s)
+    p = s.params
+    L = Float64(p.L)
+    frac_H = state_count(s, H) / (L * L - 1.0)
+    return p.frac_global_FH * state_count(s, F) * frac_H * p.max_rate_FH
+end
+
+function do_event_global_FH!(s, t)
+    @debug "do_event_global_FH!", t
+    
+    p = s.params
+    rng = s.rng
+    
+    # Draw a random forested site to be colonized
+    @assert state_count(s, F) > 0
+    loc_F = draw_location_in_state(s, F)
+    @debug "loc_F", loc_F
+    
+    # Draw a random human anywhere on the lattice
+    @assert state_count(s, H) > 0
+    loc_H = draw_location_in_state(s, H)
+    @debug "loc_H", loc_H
+    
+    # Perform event with probability that depends on neighbors of H site
+    if rand(rng) < probability_FH(s, loc_H)
+        @debug "actually doing global F -> H"
+        set_state!(s, loc_F, H, get_site(s, loc_H).beta)
+        true
+    else
+        @debug "not doing F -> H"
         false
     end
 end
@@ -409,7 +445,7 @@ function probability_FH(s::Simulation, loc_H)
 end
 
 function probability_FH_A(s::Simulation, loc_H)
-    get_neighbor_count(s, loc_H, A) / 7.0
+    get_neighbor_count(s, loc_H, A) / 8.0
 end
 
 function probability_FH_AF(s::Simulation, loc_H)
@@ -419,19 +455,7 @@ function probability_FH_AF(s::Simulation, loc_H)
             sum_neighbor_density_AF += get_neighbor_count(s, loc_neighbor, F) / 7.0
         end
     end
-    sum_neighbor_density_AF / 7.0
-end
-
-
-### GLOBAL COLONIZATION (F -> H)
-
-function get_rate_global_FH(s)
-    # TODO
-    return 0.0
-end
-
-function do_event_global_FH!(s, t)
-    false
+    sum_neighbor_density_AF / 8.0
 end
 
 
@@ -530,7 +554,7 @@ function do_event_FA!(s, t)
         
         # Perform event with probability beta / max_beta (rejection method)
         if rand(rng) < get_site(s, loc_neighbor).beta / max_beta(s)
-            @debug "actually doing F -> A"
+            @info "actually doing F -> A"
             set_state!(s, loc_F, A)
             true
         else
