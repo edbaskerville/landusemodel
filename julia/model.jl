@@ -7,9 +7,9 @@ include("util.jl")
 
 ### PARAMETERS
 
-@enum ProductivityFunction begin
-    PRODUCTIVITY_A
-    PRODUCTIVITY_AF
+@enum FHProbabilityFunction begin
+    FH_A
+    FH_AF
 end
 
 mutable struct Parameters
@@ -17,24 +17,24 @@ mutable struct Parameters
     
     L::Int64
     
-    productivityFunction::ProductivityFunction
+    t_final::Float64
+    t_output::Float64
     
-    k::Float64
-    r::Float64
+    max_rate_FH::Float64
     
-    deltaF::Bool
-    q::Float64
+    max_rate_AD::Float64
+    min_rate_frac_AD::Float64
     
-    c::Float64
-    m::Float64
+    max_rate_HD::Float64
+    min_rate_frac_HD::Float64
     
-    epsilonF::Bool
-    epsilon::Float64
+    rate_DF::Float64
     
-    sigma::Float64
+    beta_initial::Float64
+    sd_log_beta::Float64
+    rate_beta_change::Float64
     
-    maxTime::Float64
-    logInterval::Float64
+    probability_function_FH::FHProbabilityFunction
     
     function Parameters()
         p = new()
@@ -42,24 +42,24 @@ mutable struct Parameters
         p.rng_seed = nothing
         p.L = 200
         
-        p.productivityFunction = PRODUCTIVITY_A
+        p.t_final = 10000.0
+        p.t_output = 1.0
         
-        p.k = 0.0
-        p.r = 0.05
+        p.max_rate_FH = 1.0 / 30.0
         
-        p.deltaF = true
-        p.q = 1.0
+        p.max_rate_AD = 1.0 / 30.0
+        p.min_rate_frac_AD = 0.01
         
-        p.c = 0.001
-        p.m = 0.2
+        p.max_rate_HD = 1.0 / 30.0
+        p.min_rate_frac_AD = 0.01
         
-        p.epsilonF = false
-        p.epsilon = 6.0
+        p.rate_DF = 1.0 / 360.0
         
-        p.sigma = 0.2
+        p.beta_initial = 1.0 / 30.0
+        p.sd_log_beta = 1.0 / 300
+        p.rate_beta_change = 1.0
         
-        p.maxTime = 10000
-        p.logInterval = 1
+        p.probability_function_FH = FH_A
         
         p
     end
@@ -72,8 +72,6 @@ JSON2.@format Parameters noargs
 # Site states
 STATES = Vector(1:4)
 const H, A, F, D = STATES
-println(STATES)
-println(length(STATES))
 
 # Events
 EVENTS = Vector(1:7)
@@ -156,7 +154,7 @@ function initialize!(s::Simulation)
     
     # Initialize one human site in the center of the grid
     locH = div(L, 2)
-    set_state!(s, (locH, locH), H, 1.0)
+    set_state!(s, (locH, locH), H, p.beta_initial)
     
     # Initialize every other site as forest 
     for j in 1:L
@@ -268,13 +266,13 @@ function simulate(s::Simulation)
     
     # Repeatedly do events
     t_next_output = 0.0
-    while s.t < p.maxTime
+    while s.t < p.t_final
         R = sum(s.event_rates)
         
         # Draw next event time using total rate
         @debug "event_rates" s.event_rates
         t_next = if R == 0.0
-            p.maxTime
+            p.t_final
         else
             s.t + randexp(s.rng) / sum(s.event_weights)
         end
@@ -283,9 +281,9 @@ function simulate(s::Simulation)
         # If the next event is after the output time, we need to do some output
         while t_next >= t_next_output
             do_output(s, t_next_output)
-            t_next_output += p.logInterval
+            t_next_output += p.t_output
         end
-    
+        
         s.t = t_next
         
         if R > 0.0
@@ -365,7 +363,7 @@ end
 function get_rate_local_FH(s::Simulation)
     p = s.params
     
-    return (1.0 - p.k) * state_count(s, H) * 8.0 * max_site_rate_FH(s)
+    return state_count(s, F) * p.max_rate_FH
 end
 
 function do_event_local_FH!(s::Simulation, t)
@@ -374,25 +372,24 @@ function do_event_local_FH!(s::Simulation, t)
     p = s.params
     rng = s.rng
     
-    # Draw a random human to do the colonizing
-    @assert state_count(s, H) > 0
-    loc_H = draw_location_in_state(s, H)
-    site_H = get_site(s, loc_H)
-    @debug "loc_H", loc_H
+    # Draw a random forested site to be colonized
+    @assert state_count(s, F) > 0
+    loc_F = draw_location_in_state(s, F)
+    @debug "loc_F", loc_F
     
-    # Draw a random neighbor of the inhabited site
-    loc_neighbor = draw_neighbor(s, loc_H)
+    # Draw a random neighbor of the forested site
+    loc_neighbor = draw_neighbor(s, loc_F)
     @debug "loc_neighbor", loc_neighbor
     
-    # If neighbor is in state F, transition to state H
+    # If neighbor is in state H, maybe transition to state H
     @debug "neighbor state" get_state(s, loc_neighbor)
-    if get_state(s, loc_neighbor) == F
-        @debug "neighbor is F"
+    if get_state(s, loc_neighbor) == H
+        @debug "neighbor is H"
         
-        # Perform event with probability site_rate / max_site_rate (rejection method)
-        if rand(rng) < get_site_rate_FH(s, loc_H) / max_site_rate_FH(s)
+        # Perform event with probability that depends on neighbors of H
+        if rand(rng) < probability_FH(s, loc_neighbor)
             @debug "actually doing F -> H"
-            set_state!(s, loc_neighbor, H, site_H.beta)
+            set_state!(s, loc_F, H, get_site(s, loc_neighbor).beta)
             true
         else
             @debug "not doing F -> H"
@@ -403,35 +400,33 @@ function do_event_local_FH!(s::Simulation, t)
     end
 end
 
-function max_site_rate_FH(s)
-    return 1.0 / (1.0 + s.params.r)
-end
-
-function get_site_rate_FH(s::Simulation, loc::Tuple{Int64, Int64})
-    a = if s.params.productivityFunction == PRODUCTIVITY_A
-        get_productivity_A(s, loc)
+function probability_FH(s::Simulation, loc_H)
+    if s.params.probability_function_FH == FH_A
+        probability_FH_A(s, loc_H)
     else
-        get_productivity_AF(s, loc)
+        probability_FH_AF(s, loc_H)
     end
-    
-    a / (a + s.params.r)
 end
 
-function get_productivity_A(s::Simulation, loc::Tuple{Int64, Int64})
-    get_neighbor_count(s, loc, A) / 8.0
+function probability_FH_A(s::Simulation, loc_H)
+    get_neighbor_count(s, loc_H, A) / 7.0
 end
 
-function get_productivity_AF(s::Simulation, loc::Tuple{Int64, Int64})
-    @assert false
-    0.0
+function probability_FH_AF(s::Simulation, loc_H)
+    sum_neighbor_density_AF
+    for loc_neighbor in get_neighbors(s, loc_H)
+        if get_state(s, loc_neighbor) == A
+            sum_neighbor_density_AF += get_neighbor_count(s, loc_neighbor, F) / 7.0
+        end
+    end
+    sum_neighbor_density_AF / 7.0
 end
 
 
 ### GLOBAL COLONIZATION (F -> H)
 
 function get_rate_global_FH(s)
-    @assert s.params.k == 0.0
-    
+    # TODO
     return 0.0
 end
 
@@ -443,9 +438,7 @@ end
 ### AGRICULTURAL DEGRADATION (A -> D)
 
 function get_rate_AD(s::Simulation)
-    @assert s.params.deltaF
-    
-    return state_count(s, A) * max_site_rate_AD(s)
+    return state_count(s, A) * s.params.max_rate_AD
 end
 
 function do_event_AD!(s, t)
@@ -459,8 +452,8 @@ function do_event_AD!(s, t)
     loc = draw_location_in_state(s, A)
     @debug "loc", loc
     
-    # Perform event with probability site_rate / max_site_rate (rejection method)
-    if rand(rng) < get_site_rate_AD(s, loc) / max_site_rate_AD(s)
+    # Perform event with probability_AD
+    if rand(rng) < probability_AD(s, loc)
         @debug "actually doing A -> D"
         set_state!(s, loc, D)
         true
@@ -469,27 +462,16 @@ function do_event_AD!(s, t)
     end
 end
 
-function max_site_rate_AD(s)
-    return 1.0
-end
-
-function get_site_rate_AD(s, loc)
+function probability_AD(s, loc)
     p = s.params
-    q = p.q
-    m = p.m
-    
-    fq = (get_neighbor_count(s, loc, F) / 8.0)^q
-    
-    1.0 - fq / (fq + m)
+    p.min_rate_frac_AD + (1.0 - p.min_rate_frac_AD) * get_neighbor_count(s, loc, F) / 8.0
 end
 
 
 ### ABANDONMENT (H -> D) ###
 
 function get_rate_HD(s)
-    @assert s.params.deltaF
-    
-    return state_count(s, H) * max_site_rate_HD(s)
+    return state_count(s, H) * s.params.max_rate_HD
 end
 
 function do_event_HD!(s, t)
@@ -503,8 +485,8 @@ function do_event_HD!(s, t)
     loc = draw_location_in_state(s, H)
     @debug "loc", loc
     
-    # Perform event with probability site_rate / max_site_rate (rejection method)
-    if rand(rng) < get_site_rate_HD(s, loc) / max_site_rate_HD(s)
+    # Perform event with probability_HD
+    if rand(rng) < probability_HD(s, loc)
         @debug "actually doing H -> D"
         set_state!(s, loc, D)
         true
@@ -513,24 +495,16 @@ function do_event_HD!(s, t)
     end
 end
 
-function max_site_rate_HD(s)
-    return 1.0
-end
-
-function get_site_rate_HD(s, loc)
+function probability_HD(s, loc)
     p = s.params
-    c = p.c
-    
-    a = get_neighbor_count(s, loc, A) / 8.0
-    
-    1.0 - a / (a + c)
+    p.min_rate_frac_HD + (1.0 - p.min_rate_frac_HD) * get_neighbor_count(s, loc, A) / 8.0
 end
 
 
 ### CONVERSION TO AGRICULTURE (F -> A) ###
 
 function get_rate_FA(s)
-    return state_count(s, H) * 8.0 * max_beta(s)
+    return state_count(s, F) * max_beta(s)
 end
 
 function do_event_FA!(s, t)
@@ -539,25 +513,25 @@ function do_event_FA!(s, t)
     p = s.params
     rng = s.rng
     
-    # Draw a random human to do the conversion
-    @assert state_count(s, H) > 0
-    loc_H = draw_location_in_state(s, H)
-    site_H = get_site(s, loc_H)
-    @debug "loc_H", loc_H
+    # Draw a random forested site
+    @assert state_count(s, F) > 0
+    loc_F = draw_location_in_state(s, F)
+    site_F = get_site(s, loc_F)
+    @debug "loc_F", loc_F
     
-    # Draw a random neighbor of the inhabited site
-    loc_neighbor = draw_neighbor(s, loc_H)
+    # Draw a random neighbor of the forested site
+    loc_neighbor = draw_neighbor(s, loc_F)
     @debug "loc_neighbor", loc_neighbor
     
-    # If neighbor is in state F, transition to state A
+    # If neighbor is in state H, maybe transition to state A
     @debug "neighbor state" get_state(s, loc_neighbor)
-    if get_state(s, loc_neighbor) == F
-        @debug "neighbor is F"
+    if get_state(s, loc_neighbor) == H
+        @debug "neighbor is H"
         
         # Perform event with probability beta / max_beta (rejection method)
-        if rand(rng) < site_H.beta / max_beta(s)
+        if rand(rng) < get_site(s, loc_neighbor).beta / max_beta(s)
             @debug "actually doing F -> A"
-            set_state!(s, loc_neighbor, A)
+            set_state!(s, loc_F, A)
             true
         else
             @debug "not doing F -> A"
@@ -572,9 +546,7 @@ end
 ### RECOVERY OF DEGRADED LAND (D -> F)
 
 function get_rate_DF(s)
-    @assert !s.params.epsilonF
-    
-    return state_count(s, D) * s.params.epsilon
+    return state_count(s, D) * s.params.rate_DF
 end
 
 function do_event_DF!(s, t)
@@ -596,7 +568,7 @@ end
 ### BETA CHANGE
 
 function get_rate_beta_change(s)
-    return state_count(s, H) * s.params.sigma
+    return state_count(s, H) * s.params.rate_beta_change
 end
 
 function do_event_beta_change!(s, t)
@@ -605,11 +577,16 @@ function do_event_beta_change!(s, t)
     p = s.params
     rng = s.rng
     
+    # Standard deviation of random walk for an average-length timestep
+    # (variance is proportional to timestep, inversely proportional to rate)
+    sd2 = p.sd_log_beta * p.sd_log_beta
+    sd_dt = sqrt(sd2 / p.rate_beta_change)
+    
     # Draw a random inhabited location
     @assert state_count(s, H) > 0
     loc = draw_location_in_state(s, H)
     site = get_site(s, loc)
-    beta = max(0.0, site.beta + randn(rng) * 0.01)
+    beta = site.beta * exp(randn(rng) * sd_dt)
     
     set_state!(s, loc, H, beta)
     true
@@ -643,6 +620,15 @@ function get_neighbor_count(s::Simulation, loc, state)
         end
     end
     count
+end
+
+function get_neighbors(s::Simulation, loc)
+    L = s.params.L
+    neighbors = Vector{Loc}(undef, length(NEIGHBOR_OFFSETS))
+    for i = 1:lastindex(NEIGHBOR_OFFSETS)
+        neighbors[i] = apply_offset(loc, NEIGHBOR_OFFSETS[i], L)
+    end
+    neighbors
 end
 
 function apply_offset(loc, offset, L)
