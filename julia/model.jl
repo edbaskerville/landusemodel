@@ -1,7 +1,12 @@
 import Base.length
 using Random
+using Statistics
 using StatsBase
 using DataStructures: SortedDict
+using Images
+using FileIO
+using Printf
+using SQLite
 
 include("util.jl")
 
@@ -37,6 +42,14 @@ mutable struct Parameters
     
     probability_function_FH::FHProbabilityFunction
     
+#     H_color: Tuple{Float64, Float64, Float64}
+#     A_color: Tuple{Float64, Float64, Float64}
+#     F_color: Tuple{Float64, Float64, Float64}
+#     D_color: Tuple{Float64, Float64, Float64}
+    
+    enable_animation::Bool
+    t_animation_frame::Float64
+    
     function Parameters()
         p = new()
         
@@ -60,6 +73,9 @@ mutable struct Parameters
         p.beta_initial = 1.0 / 10.0
         p.sd_log_beta = 1.0 / 300
         p.rate_beta_change = 1.0
+        
+        p.enable_animation = true
+        p.t_animation_frame = 30.0
         
         p.probability_function_FH = FH_A
         
@@ -93,23 +109,24 @@ LOCAL_FH, GLOBAL_FH, AD, HD, FA, DF, BETA_CHANGE = EVENTS
 Loc = Tuple{Int64, Int64}
 
 struct Site
+    t_init::Float64
     state::Int64
     beta::Union{Float64, Nothing}
     
     function Site()
-        Site(0, 0)
+        Site(0.0, 0)
     end
     
-    function Site(state::Int64)
-        Site(state, nothing)
+    function Site(t::Float64, state::Int64)
+        Site(t, state, nothing)
     end
     
-    function Site(state::Int64, beta::Union{Float64, Nothing})
+    function Site(t::Float64, state::Int64, beta::Union{Float64, Nothing})
         if beta === nothing
             @assert state != H
         end
         
-        new(state, beta)
+        new(t, state, beta)
     end
 end
 
@@ -126,6 +143,9 @@ mutable struct Simulation
     event_rates::Vector{Float64}
     event_weights::Weights
     
+    lifetime_sums::Vector{Float64}
+    lifetime_counts::Vector{Int64}
+    
     function Simulation(params::Parameters)
         s = new()
         
@@ -141,6 +161,9 @@ mutable struct Simulation
         s.sites = Matrix{Site}(undef, p.L, p.L)
         s.sites_by_state = Vector{ArraySet{Loc}}(length(STATES))
         s.betas = SortedDict{Float64, Int64}()
+        
+        s.lifetime_sums = zeros(Float64, length(STATES))
+        s.lifetime_counts = zeros(Int64, length(STATES))
         
         s.event_rates = repeat([0.0], length(EVENTS))
         
@@ -224,9 +247,11 @@ function set_state!(s::Simulation, loc::Tuple{Int64, Int64}, state::Int64, beta:
     loc_index = CartesianIndex(loc)
     site = s.sites[loc_index]
     
-    # Remove from sites_by_state set for old state
+    # Remove from sites_by_state set for old state; track lifetime
     if site.state != 0 && site.state != state
         remove!(s.sites_by_state[site.state], loc)
+        s.lifetime_sums[site.state] += s.t - site.t_init
+        s.lifetime_counts[site.state] += 1
     end
     
     # Insert into sites_by_state set for new state
@@ -234,7 +259,11 @@ function set_state!(s::Simulation, loc::Tuple{Int64, Int64}, state::Int64, beta:
         insert!(s.sites_by_state[state], loc)
     end
     
-    s.sites[loc_index] = Site(state, beta)
+    if site.state == state
+        s.sites[loc_index] = Site(site.t_init, state, beta)
+    else
+        s.sites[loc_index] = Site(s.t, state, beta)
+    end
     
     # Remove old beta from beta tracking structure
     if site.state == H
@@ -266,8 +295,48 @@ end
 function simulate(s::Simulation)
     p = s.params
     
+    if p.enable_animation
+        if isdir("images")
+            error("images already exists; delete first")
+        end
+        mkdir("images")
+    end
+    
+    if isfile("output.sqlite")
+        error("output.sqlite already exists; delete first")
+    end
+    db = SQLite.DB("output.sqlite")
+    
+    DBInterface.execute(db, """
+        CREATE TABLE output (
+            time REAL,
+            H INTEGER,
+            H_lifetime_avg REAL,
+            A INTEGER,
+            A_lifetime_avg REAL,
+            F INTEGER,
+            F_lifetime_avg REAL,
+            D INTEGER,
+            D_lifetime_avg REAL,
+            beta_mean REAL,
+            beta_sd REAL,
+            beta_min REAL,
+            beta_max REAL,
+            beta_025 REAL,
+            beta_050 REAL,
+            beta_100 REAL,
+            beta_250 REAL,
+            beta_500 REAL,
+            beta_750 REAL,
+            beta_900 REAL,
+            beta_950 REAL,
+            beta_975 REAL
+        )
+    """)
+    
     # Repeatedly do events
     t_next_output = 0.0
+    t_next_frame = 0.0
     while s.t < p.t_final
         R = sum(s.event_rates)
         
@@ -282,7 +351,14 @@ function simulate(s::Simulation)
         
         # If the next event is after the output time, we need to do some output
         while t_next >= t_next_output
-            do_output(s, t_next_output)
+            do_output(s, db, t_next_output)
+            if p.enable_animation && t_next_output == t_next_frame
+                save(
+                    joinpath("images", @sprintf("%d.png", Int64(t_next_frame))),
+                    colorview(Gray, rand(s.rng, 200, 200))
+                )
+                t_next_frame += p.t_animation_frame
+            end
             t_next_output += p.t_output
         end
         
@@ -302,8 +378,46 @@ function simulate(s::Simulation)
     end
 end
 
-function do_output(s::Simulation, t_output)
+function do_output(s::Simulation, db, t_output)
     println("Outputting at ", t_output)
+    
+    DBInterface.execute(db, """
+        INSERT INTO output VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    """, vcat(
+        [
+            t_output, # time
+            state_count(s, H),
+            get_lifetime_avg(s, H),
+            state_count(s, A),
+            get_lifetime_avg(s, A),
+            state_count(s, F),
+            get_lifetime_avg(s, F),
+            state_count(s, D),
+            get_lifetime_avg(s, D)
+        ],
+        beta_output_values(s)
+    ))
+end
+
+function beta_output_values(s::Simulation)
+    betas = Vector{Float64}()
+    for (beta, count) = s.betas
+        for i in 1:count
+            push!(betas, beta)
+        end
+    end
+    
+    beta_mean = mean(betas)
+    beta_sd = std(betas, corrected = false)
+    beta_min = minimum(betas)
+    beta_max = maximum(betas)
+    beta_quantiles = quantile(betas, [0.025, 0.05, 0.10, 0.25, 0.5, 0.75, 0.9, 0.95, 0.975])
+    
+    vcat([beta_mean, beta_sd, beta_min, beta_max], beta_quantiles)
+end
+
+function get_lifetime_avg(s::Simulation, state::Int64)
+    s.lifetime_sums[state] / s.lifetime_counts[state]    
 end
 
 function update_rates!(s::Simulation)
