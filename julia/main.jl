@@ -15,8 +15,8 @@ include("model.jl")
 # )
 
 function main()
-    p = Parameters()
-    s = Simulation(p)
+    params = load_parameters_from_json(ARGS[1])
+    s = Simulation(params)
     
     simulate(s)
 end

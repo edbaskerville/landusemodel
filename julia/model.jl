@@ -42,47 +42,33 @@ mutable struct Parameters
     
     probability_function_FH::FHProbabilityFunction
     
-#     H_color: Tuple{Float64, Float64, Float64}
-#     A_color: Tuple{Float64, Float64, Float64}
-#     F_color: Tuple{Float64, Float64, Float64}
-#     D_color: Tuple{Float64, Float64, Float64}
-    
     enable_animation::Bool
     t_animation_frame::Float64
     
+    H_color::Vector{Float64}
+    A_color::Vector{Float64}
+    F_color::Vector{Float64}
+    D_color::Vector{Float64}
+    
+    beta_bg_color::Vector{Float64}
+    beta_min_color::Vector{Float64}
+    beta_max_color::Vector{Float64}
+    
+    beta_image_max::Float64
+
     function Parameters()
         p = new()
-        
         p.rng_seed = nothing
-        p.L = 200
-        
-        p.t_final = 10000.0
-        p.t_output = 1.0
-        
-        p.max_rate_FH = 1.0 / 30.0
-        p.frac_global_FH = 0.05
-        
-        p.max_rate_AD = 1.0 / 360.0
-        p.min_rate_frac_AD = 0.01
-        
-        p.max_rate_HD = 1.0 / 360.0
-        p.min_rate_frac_AD = 0.01
-        
-        p.rate_DF = 1.0 / 360.0
-        
-        p.beta_initial = 1.0 / 10.0
-        p.sd_log_beta = 1.0 / 300
-        p.rate_beta_change = 1.0
-        
-        p.enable_animation = true
-        p.t_animation_frame = 30.0
-        
-        p.probability_function_FH = FH_A
-        
         p
     end
 end
 JSON2.@format Parameters noargs
+
+function load_parameters_from_json(filename) :: Parameters
+    str = open(f -> read(f, String), filename)
+    params = JSON2.read(str, Parameters)
+    params
+end
 
 
 ### CONSTANTS
@@ -296,10 +282,14 @@ function simulate(s::Simulation)
     p = s.params
     
     if p.enable_animation
-        if isdir("images")
-            error("images already exists; delete first")
+        if isdir("state_images")
+            error("state_images already exists; delete first")
         end
-        mkdir("images")
+        if isdir("beta_images")
+            error("beta_images already exists; delete first")
+        end
+        mkdir("state_images")
+        mkdir("beta_images")
     end
     
     if isfile("output.sqlite")
@@ -351,11 +341,16 @@ function simulate(s::Simulation)
         
         # If the next event is after the output time, we need to do some output
         while t_next >= t_next_output
-            do_output(s, db, t_next_output)
+            betas = get_betas(s)
+            do_output(s, db, t_next_output, betas)
             if p.enable_animation && t_next_output == t_next_frame
                 save(
-                    joinpath("images", @sprintf("%d.png", Int64(t_next_frame))),
-                    colorview(Gray, rand(s.rng, 200, 200))
+                    joinpath("state_images", @sprintf("%d.png", Int64(t_next_frame))),
+                    make_state_image(s)
+                )
+                save(
+                    joinpath("beta_images", @sprintf("%d.png", Int64(t_next_frame))),
+                    make_beta_image(s, betas)
                 )
                 t_next_frame += p.t_animation_frame
             end
@@ -378,8 +373,78 @@ function simulate(s::Simulation)
     end
 end
 
-function do_output(s::Simulation, db, t_output)
+function make_state_image(s::Simulation)
+    p = s.params
+    
+    H_color = RGB(p.H_color...)
+    A_color = RGB(p.A_color...)
+    F_color = RGB(p.F_color...)
+    D_color = RGB(p.D_color...)
+    
+    function convert(x)
+        if x.state == H
+            H_color
+        elseif x.state == A
+            A_color
+        elseif x.state == F
+            F_color
+        elseif x.state == D
+            D_color
+        end
+    end
+    
+    convert.(s.sites)
+end
+
+function get_betas(s::Simulation)
+    betas = Vector{Float64}()
+    for (beta, count) = s.betas
+        for i in 1:count
+            push!(betas, beta)
+        end
+    end
+    betas
+end
+
+function make_beta_image(s::Simulation, betas)
+    p = s.params
+    
+    bg_color = RGB(p.beta_bg_color...)
+    
+    function convert(x)
+        if x.state == H
+            value01 = clamp01(x.beta / p.beta_image_max)
+            rgb = p.beta_min_color .+ (p.beta_max_color .- p.beta_min_color) .* value01
+            
+            RGB(rgb...)
+        else
+            bg_color
+        end
+    end
+    
+    convert.(s.sites)
+end
+
+function do_output(s::Simulation, db, t_output, betas)
     println("Outputting at ", t_output)
+    
+    beta_mean = mean(betas)
+    beta_sd = std(betas, corrected = false)
+    beta_min = if length(betas) == 0
+        NaN
+    else
+        minimum(betas)
+    end
+    beta_max = if length(betas) == 0
+        NaN
+    else
+        maximum(betas)
+    end
+    beta_quantiles = if length(betas) == 0
+        repeat([NaN], 9)
+    else
+        quantile(betas, [0.025, 0.05, 0.10, 0.25, 0.5, 0.75, 0.9, 0.95, 0.975])
+    end
     
     DBInterface.execute(db, """
         INSERT INTO output VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
@@ -395,25 +460,9 @@ function do_output(s::Simulation, db, t_output)
             state_count(s, D),
             get_lifetime_avg(s, D)
         ],
-        beta_output_values(s)
+        [beta_mean, beta_sd, beta_min, beta_max],
+        beta_quantiles
     ))
-end
-
-function beta_output_values(s::Simulation)
-    betas = Vector{Float64}()
-    for (beta, count) = s.betas
-        for i in 1:count
-            push!(betas, beta)
-        end
-    end
-    
-    beta_mean = mean(betas)
-    beta_sd = std(betas, corrected = false)
-    beta_min = minimum(betas)
-    beta_max = maximum(betas)
-    beta_quantiles = quantile(betas, [0.025, 0.05, 0.10, 0.25, 0.5, 0.75, 0.9, 0.95, 0.975])
-    
-    vcat([beta_mean, beta_sd, beta_min, beta_max], beta_quantiles)
 end
 
 function get_lifetime_avg(s::Simulation, state::Int64)
