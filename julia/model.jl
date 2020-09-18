@@ -685,7 +685,7 @@ end
 
 function probability_HD(s, loc)
     p = s.params
-    p.min_rate_frac_HD + (1.0 - p.min_rate_frac_HD) * get_neighbor_count(s, loc, A) / 8.0
+    p.min_rate_frac_HD + (1.0 - p.min_rate_frac_HD) * (1.0 - get_neighbor_count(s, loc, A) / 8.0)
 end
 
 
