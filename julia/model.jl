@@ -333,6 +333,7 @@ function simulate(s::Simulation)
         # Draw next event time using total rate
         @debug "event_rates" s.event_rates
         t_next = if R == 0.0
+            @assert false
             p.t_final
         else
             s.t + randexp(s.rng) / sum(s.event_weights)
@@ -528,7 +529,11 @@ end
 function get_rate_local_FH(s::Simulation)
     p = s.params
     
-    return (1.0 - p.frac_global_FH) * state_count(s, F) * p.max_rate_FH
+    if state_count(s, H) == 0
+        0.0
+    else
+        (1.0 - p.frac_global_FH) * state_count(s, F) * p.max_rate_FH
+    end
 end
 
 function do_event_local_FH!(s::Simulation, t)

@@ -5,19 +5,19 @@
   "t_final" : 10000.0,
   "t_output" : 1.0,
 
-  "max_rate_FH" : 0.03,
-  "frac_global_FH" : 0.05,
+  "max_rate_FH" : 0.006,
+  "frac_global_FH" : 0.0,
 
   "max_rate_AD" : 0.003,
-  "min_rate_frac_AD" : 0.01,
+  "min_rate_frac_AD" : 0.25,
 
   "max_rate_HD" : 0.003,
-  "min_rate_frac_AD" : 0.01,
+  "min_rate_frac_HD" : 0.10,
 
-  "rate_DF" : 0.003,
+  "rate_DF" : 0.0003,
 
-  "beta_initial" : 0.1,
-  "sd_log_beta" : 0.005,
+  "beta_initial" : 0.100,
+  "sd_log_beta" : 0.10,
   "rate_beta_change" : 1.0,
 
   "probability_function_FH" : "FH_A",
@@ -25,10 +25,10 @@
   "enable_animation" : true,
   "t_animation_frame" : 30.0,
 
-  "H_color" : [1.0, 0.0, 0.0],
-  "A_color" : [0.1, 0.9, 0.1],
-  "F_color" : [0.1, 0.1, 1.0],
-  "D_color" : [0.5, 0.5, 0.5],
+  "H_color" : [0.0, 0.6, 0.9],
+  "A_color" : [1.0, 0.9, 0.1],
+  "F_color" : [0.1, 0.6, 0.1],
+  "D_color" : [0.6, 0.5, 0.2],
 
   "beta_bg_color" : [0.9, 0.9, 0.9],
   "beta_min_color" : [0.5, 0.1, 0.1],
