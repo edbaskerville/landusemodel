@@ -612,7 +612,7 @@ function probability_FH_A(s::Simulation, loc_H)
 end
 
 function probability_FH_AF(s::Simulation, loc_H)
-    sum_neighbor_density_AF
+    sum_neighbor_density_AF = 0.0
     for loc_neighbor in get_neighbors(s, loc_H)
         if get_state(s, loc_neighbor) == A
             sum_neighbor_density_AF += get_neighbor_count(s, loc_neighbor, F) / 7.0
@@ -649,6 +649,7 @@ function do_event_AD!(s, t)
     end
 end
 
+# TODO: Check this, nonlinearity?
 function probability_AD(s, loc)
     p = s.params
     p.min_rate_frac_AD + (1.0 - p.min_rate_frac_AD) * get_neighbor_count(s, loc, F) / 8.0
