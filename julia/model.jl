@@ -649,10 +649,10 @@ function do_event_AD!(s, t)
     end
 end
 
-# TODO: Check this, nonlinearity?
+# TODO: nonlinearity?
 function probability_AD(s, loc)
     p = s.params
-    p.min_rate_frac_AD + (1.0 - p.min_rate_frac_AD) * get_neighbor_count(s, loc, F) / 8.0
+    p.min_rate_frac_AD + (1.0 - p.min_rate_frac_AD) * (1.0 - get_neighbor_count(s, loc, F) / 8.0)
 end
 
 
