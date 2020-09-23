@@ -1,11 +1,11 @@
 {
-  "rng_seed" : null,
+  "rng_seed" : 1,
   "L" : 200,
   
-  "t_final" : 10000.0,
-  "t_output" : 1.0,
+  "t_final" : 18000.0,
+  "t_output" : 30.0,
 
-  "max_rate_FH" : 0.006,
+  "max_rate_FH" : 0.100,
   "frac_global_FH" : 0.0,
 
   "max_rate_AD" : 0.003,
