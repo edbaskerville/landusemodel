@@ -38,7 +38,6 @@ mutable struct Parameters
     
     beta_initial::Float64
     sd_log_beta::Float64
-    rate_beta_change::Float64
     
     probability_function_FH::FHProbabilityFunction
     
@@ -78,26 +77,23 @@ STATES = Vector(1:4)
 const H, A, F, D = STATES
 
 # Events
-EVENTS = Vector(1:7)
-LOCAL_FH, GLOBAL_FH, AD, HD, FA, DF, BETA_CHANGE = EVENTS
-# const LOCAL_FH = 1
-# const GLOBAL_FH = 2
-# const AD = 3
-# const HD = 4
-# const FA = 5
-# const DF = 6
-# const BETA_CHANGE = 7
-# EVENTS = [LOCAL_FH, GLOBAL_FH, AD, HD, FA, DF, BETA_CHANGE]
+EVENTS = Vector(1:6)
+const LOCAL_FH, GLOBAL_FH, AD, HD, FA, DF = EVENTS
 
 
 ### SIMULATION STATE AND INITIALIZATION
 
 Loc = Tuple{Int64, Int64}
 
+struct TBetaPair
+    t::Float64
+    beta::Float64
+end
+
 struct Site
     t_init::Float64
     state::Int64
-    beta::Union{Float64, Nothing}
+    t_beta::Union{TBetaPair, Nothing}
     
     function Site()
         Site(0.0, 0)
@@ -107,12 +103,12 @@ struct Site
         Site(t, state, nothing)
     end
     
-    function Site(t::Float64, state::Int64, beta::Union{Float64, Nothing})
-        if beta === nothing
+    function Site(t::Float64, state::Int64, t_beta::Union{TBetaPair, Nothing})
+        if t_beta === nothing
             @assert state != H
         end
         
-        new(t, state, beta)
+        new(t, state, t_beta)
     end
 end
 
@@ -122,9 +118,10 @@ mutable struct Simulation
     t::Float64
     
     sites::Matrix{Site}
+    locs::Matrix{Loc}
     sites_by_state::Vector{ArraySet{Loc}}
     
-    betas::SortedDict{Float64, Int64}
+    max_beta::Float64
     
     event_rates::Vector{Float64}
     event_weights::Weights
@@ -145,8 +142,9 @@ mutable struct Simulation
         
         s.t = 0.0
         s.sites = Matrix{Site}(undef, p.L, p.L)
+        s.locs = Matrix{Loc}(undef, p.L, p.L)
         s.sites_by_state = Vector{ArraySet{Loc}}(length(STATES))
-        s.betas = SortedDict{Float64, Int64}()
+        s.max_beta = p.beta_initial
         
         s.lifetime_sums = zeros(Float64, length(STATES))
         s.lifetime_counts = zeros(Int64, length(STATES))
@@ -165,11 +163,13 @@ function initialize!(s::Simulation)
     
     # Initialize one human site in the center of the grid
     locH = div(L, 2)
-    set_state!(s, (locH, locH), H, p.beta_initial)
+    set_state!(s, (locH, locH), H, TBetaPair(0.0, p.beta_initial))
     
     # Initialize every other site as forest 
     for j in 1:L
         for i in 1:L
+            s.locs[i,j] = (i, j)
+            
             if !(i == locH && j == locH)
                 set_state!(s, (i, j), F)
             end
@@ -180,36 +180,6 @@ function initialize!(s::Simulation)
     @assert length(s.sites_by_state[F]) == L * L - 1
     
     update_rates!(s)
-end
-
-
-### MAX BETA TRACKING
-
-function max_beta(s)
-    if length(s.betas) > 0
-        last(s.betas)[1]
-    else
-        0.0
-    end
-end
-
-function insert_beta!(s, beta)
-    if haskey(s.betas, beta)
-        insert!(s.betas, beta, s.betas[beta] + 1)
-    else
-        insert!(s.betas, beta, 1)
-    end
-    nothing
-end
-
-function remove_beta!(s, beta)
-    new_count = s.betas[beta] - 1
-    if new_count == 0
-        pop!(s.betas, beta)
-    else
-        insert!(s.betas, beta, new_count)
-    end
-    nothing
 end
 
 
@@ -227,7 +197,7 @@ function set_state!(s::Simulation, loc::Tuple{Int64, Int64}, state::Int64)
     set_state!(s, loc, state, nothing)
 end
 
-function set_state!(s::Simulation, loc::Tuple{Int64, Int64}, state::Int64, beta::Union{Float64, Nothing})
+function set_state!(s::Simulation, loc::Tuple{Int64, Int64}, state::Int64, t_beta::Union{TBetaPair, Nothing})
     @assert state != 0
     
     loc_index = CartesianIndex(loc)
@@ -246,23 +216,37 @@ function set_state!(s::Simulation, loc::Tuple{Int64, Int64}, state::Int64, beta:
     end
     
     if site.state == state
-        s.sites[loc_index] = Site(site.t_init, state, beta)
+        s.sites[loc_index] = Site(site.t_init, state, t_beta)
     else
-        s.sites[loc_index] = Site(s.t, state, beta)
+        s.sites[loc_index] = Site(s.t, state, t_beta)
     end
+end
+
+function get_beta!(s::Simulation, loc::Tuple{Int64, Int64})
+    @debug "get_beta!", s.t, loc
     
-    # Remove old beta from beta tracking structure
-    if site.state == H
-        if state != H || beta != site.beta
-            remove_beta!(s, site.beta)
-        end
-    end
+    site = get_site(s, loc)
+    @assert site.state == H
     
-    # Add new beta to beta tracking structure
-    if state == H
-        if site.state != H || beta != site.beta
-            insert_beta!(s, beta)
+    if s.t > site.t_beta.t
+        dt = s.t - site.t_beta.t
+        p = s.params
+        rng = s.rng
+
+        # Standard deviation of random walk for an average-length timestep
+        # (variance is proportional to timestep, inversely proportional to rate)
+        sd_dt = sqrt(p.sd_log_beta^2 * dt)
+        beta = site.t_beta.beta * exp(randn(rng) * sd_dt)
+        
+        set_state!(s, loc, H, TBetaPair(s.t, beta))
+        
+        if beta > s.max_beta
+            s.max_beta = beta
         end
+        
+        beta
+    else
+        site.t_beta.beta
     end
 end
 
@@ -333,7 +317,6 @@ function simulate(s::Simulation)
         # Draw next event time using total rate
         @debug "event_rates" s.event_rates
         t_next = if R == 0.0
-            @assert false
             p.t_final
         else
             s.t + randexp(s.rng) / sum(s.event_weights)
@@ -342,7 +325,7 @@ function simulate(s::Simulation)
         
         # If the next event is after the output time, we need to do some output
         while t_next >= t_next_output
-            betas = get_betas(s)
+            betas = get_betas!(s)
             do_output(s, db, t_next_output, betas)
             if p.enable_animation && t_next_output == t_next_frame
                 save(
@@ -351,7 +334,7 @@ function simulate(s::Simulation)
                 )
                 save(
                     joinpath("beta_images", @sprintf("%d.png", Int64(t_next_frame))),
-                    make_beta_image(s, betas)
+                    make_beta_image!(s, betas)
                 )
                 t_next_frame += p.t_animation_frame
             end
@@ -397,24 +380,29 @@ function make_state_image(s::Simulation)
     convert.(s.sites)
 end
 
-function get_betas(s::Simulation)
-    betas = Vector{Float64}()
-    for (beta, count) = s.betas
-        for i in 1:count
-            push!(betas, beta)
-        end
+function get_betas!(s::Simulation)
+    betas = Vector{Float64}(undef, state_count(s, H))
+    for (i, loc) in enumerate(s.sites_by_state[H].array)
+        betas[i] = get_beta!(s, loc)
+    end
+    s.max_beta = if length(betas) == 0
+        0.0
+    else
+        maximum(betas)
     end
     betas
 end
 
-function make_beta_image(s::Simulation, betas)
+function make_beta_image!(s::Simulation, betas)
     p = s.params
     
     bg_color = RGB(p.beta_bg_color...)
     
-    function convert(x)
-        if x.state == H
-            value01 = clamp01(x.beta / p.beta_image_max)
+    function convert(loc)
+        site = get_site(s, loc)
+        if site.state == H
+            beta = get_beta!(s, loc)
+            value01 = clamp01(beta / p.beta_image_max)
             rgb = p.beta_min_color .+ (p.beta_max_color .- p.beta_min_color) .* value01
             
             RGB(rgb...)
@@ -423,7 +411,7 @@ function make_beta_image(s::Simulation, betas)
         end
     end
     
-    convert.(s.sites)
+    convert.(s.locs)
 end
 
 function do_output(s::Simulation, db, t_output, betas)
@@ -500,8 +488,6 @@ function get_rate(event_id, s::Simulation)
         get_rate_FA(s)
     elseif event_id == DF
         get_rate_DF(s)
-    elseif event_id == BETA_CHANGE
-        get_rate_beta_change(s)
     end
 end
 
@@ -518,8 +504,6 @@ function do_event!(event_id, s::Simulation, t::Float64)
         do_event_FA!(s, t)
     elseif event_id == DF
         do_event_DF!(s, t)
-    elseif event_id == BETA_CHANGE
-        do_event_beta_change!(s, t)
     end
 end
 
@@ -559,7 +543,11 @@ function do_event_local_FH!(s::Simulation, t)
         # Perform event with probability that depends on neighbors of H
         if rand(rng) < probability_FH(s, loc_neighbor)
             @info "actually doing local F -> H"
-            set_state!(s, loc_F, H, get_site(s, loc_neighbor).beta)
+            
+            # Get beta from neighbor at current time to use for colonized site
+            # (implicitly updates stored beta value)
+            beta = get_beta!(s, loc_neighbor)
+            set_state!(s, loc_F, H, TBetaPair(s.t, beta))
             true
         else
             @debug "not doing F -> H"
@@ -596,7 +584,11 @@ function do_event_global_FH!(s, t)
     # Perform event with probability that depends on neighbors of H site
     if rand(rng) < probability_FH(s, loc_H)
         @debug "actually doing global F -> H"
-        set_state!(s, loc_F, H, get_site(s, loc_H).beta)
+        
+        # Get beta from human site at current time to use for colonized site
+        # (implicitly updates stored beta value)
+        beta = get_beta!(s, loc_H)
+        set_state!(s, loc_F, H, beta)
         true
     else
         @debug "not doing F -> H"
@@ -697,7 +689,7 @@ end
 ### CONVERSION TO AGRICULTURE (F -> A) ###
 
 function get_rate_FA(s)
-    return state_count(s, F) * max_beta(s)
+    return state_count(s, F) * s.max_beta
 end
 
 function do_event_FA!(s, t)
@@ -721,8 +713,12 @@ function do_event_FA!(s, t)
     if get_state(s, loc_neighbor) == H
         @debug "neighbor is H"
         
+        # Observe beta for neighbor at current time
+        # (implicitly updates stored value)
+        beta = get_beta!(s, loc_neighbor)
+        
         # Perform event with probability beta / max_beta (rejection method)
-        if rand(rng) < get_site(s, loc_neighbor).beta / max_beta(s)
+        if rand(rng) < beta / s.max_beta
             @info "actually doing F -> A"
             set_state!(s, loc_F, A)
             true
@@ -754,34 +750,6 @@ function do_event_DF!(s, t)
     @debug "loc", loc
     
     set_state!(s, loc, F)
-    true
-end
-
-
-### BETA CHANGE
-
-function get_rate_beta_change(s)
-    return state_count(s, H) * s.params.rate_beta_change
-end
-
-function do_event_beta_change!(s, t)
-    @debug "do_event_beta_change!", t
-    
-    p = s.params
-    rng = s.rng
-    
-    # Standard deviation of random walk for an average-length timestep
-    # (variance is proportional to timestep, inversely proportional to rate)
-    sd2 = p.sd_log_beta * p.sd_log_beta
-    sd_dt = sqrt(sd2 / p.rate_beta_change)
-    
-    # Draw a random inhabited location
-    @assert state_count(s, H) > 0
-    loc = draw_location_in_state(s, H)
-    site = get_site(s, loc)
-    beta = site.beta * exp(randn(rng) * sd_dt)
-    
-    set_state!(s, loc, H, beta)
     true
 end
 
