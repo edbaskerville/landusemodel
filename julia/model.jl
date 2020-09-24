@@ -36,7 +36,9 @@ mutable struct Parameters
 
     rate_DF::Float64
 
-    beta_initial::Float64
+    p_H_init::Float64
+    beta_init_mean::Float64
+    sd_log_beta_init::Float64
     sd_log_beta::Float64
 
     probability_function_FH::FHProbabilityFunction
@@ -144,7 +146,7 @@ mutable struct Simulation
         s.sites = Matrix{Site}(undef, p.L, p.L)
         s.locs = Matrix{Loc}(undef, p.L, p.L)
         s.sites_by_state = Vector{ArraySet{Loc}}(length(STATES))
-        s.max_beta = p.beta_initial
+        s.max_beta = 0.0
 
         s.lifetime_sums = zeros(Float64, length(STATES))
         s.lifetime_counts = zeros(Int64, length(STATES))
@@ -162,22 +164,25 @@ function initialize!(s::Simulation)
     L = p.L
 
     # Initialize one human site in the center of the grid
-    locH = div(L, 2)
-    set_state!(s, (locH, locH), H, TBetaPair(0.0, p.beta_initial))
+    # locH = div(L, 2)
+    # set_state!(s, (locH, locH), H, TBetaPair(0.0, p.beta_initial))
 
-    # Initialize every other site as forest
+    # Initialize sites: state H with probability p_H_init; rest forest
     for j in 1:L
         for i in 1:L
             s.locs[i,j] = (i, j)
 
-            if !(i == locH && j == locH)
+            if rand(s.rng) < p.p_H_init
+                beta = p.beta_init_mean * exp(randn(s.rng) * p.sd_log_beta_init)
+                set_state!(s, (i, j), H, TBetaPair(0.0, beta))
+            else
                 set_state!(s, (i, j), F)
             end
         end
     end
 
-    @assert length(s.sites_by_state[H]) == 1
-    @assert length(s.sites_by_state[F]) == L * L - 1
+    @assert length(s.sites_by_state[H]) > 0
+    @assert length(s.sites_by_state[F]) == L * L - length(s.sites_by_state[H])
 
     update_rates!(s)
 end
@@ -316,11 +321,11 @@ function simulate(s::Simulation)
 
         # Draw next event time using total rate
         # @debug "event_rates" s.event_rates
-        t_next = if R == 0.0
-            @info "R == 0.0; ending simulation"
+        t_next = if state_count(s, H) == 0
+            @info "n_H == 0; ending simulation"
             p.t_final
         else
-            s.t + randexp(s.rng) / sum(s.event_weights)
+            min(p.t_final, s.t + randexp(s.rng) / sum(s.event_weights))
         end
         # @debug "t_next" t_next
 
@@ -341,7 +346,7 @@ function simulate(s::Simulation)
                 t_next_frame += p.t_animation_frame
             end
 
-            if R == 0.0
+            if state_count(s, H) == 0
                 break
             else
                 t_next_output += p.t_output
@@ -350,7 +355,7 @@ function simulate(s::Simulation)
 
         s.t = t_next
 
-        if R > 0.0
+        if t_next < p.t_final
             # Sample next event category proportional to event rate
             event_id = sample(s.rng, EVENTS, s.event_weights)
             # @debug "event_id" event_id
@@ -545,7 +550,7 @@ function do_event_local_FH!(s::Simulation, t)
 
         # Perform event with probability that depends on neighbors of H
         if rand(rng) < probability_FH(s, loc_H)
-            @info "actually doing local F -> H"
+            # @info "actually doing local F -> H"
 
             # Get beta from H site at current time to use for colonized site
             # (implicitly updates stored beta value)
@@ -720,7 +725,7 @@ function do_event_FA!(s, t)
 
         # Perform event with probability beta / max_beta (rejection method)
         if rand(rng) < beta / s.max_beta
-            @info "actually doing F -> A"
+            # @info "actually doing F -> A"
             set_state!(s, loc_neighbor, A)
             true
         else
