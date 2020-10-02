@@ -2,29 +2,29 @@
   "rng_seed" : 1,
   "L" : 200,
 
-  "t_final" : 100000.0,
-  "t_output" : 100.0,
+  "t_final" : 1000000.0,
+  "t_output" : 1000.0,
 
-  "max_rate_FH" : 0.01,
+  "max_rate_FH" : 0.005,
   "frac_global_FH" : 0.0,
 
-  "max_rate_AD" : 0.0001,
-  "min_rate_frac_AD" : 0.25,
+  "max_rate_AD" : 0.001,
+  "min_rate_frac_AD" : 0.1,
 
-  "max_rate_HD" : 0.00001,
-  "min_rate_frac_HD" : 0.25,
+  "max_rate_HD" : 0.001,
+  "min_rate_frac_HD" : 0.001,
 
   "rate_DF" : 0.001,
 
-  "p_H_init" : 0.01,
+  "p_H_init" : 0.5,
   "beta_init_mean" : 0.001,
   "sd_log_beta_init" : 0.001,
-  "sd_log_beta" : 0.01,
+  "sd_log_beta" : 0.045,
 
   "probability_function_FH" : "FH_AF",
 
   "enable_animation" : true,
-  "t_animation_frame" : 100.0,
+  "t_animation_frame" : 1000.0,
 
   "H_color" : [0.0, 0.6, 0.9],
   "A_color" : [1.0, 0.9, 0.1],
