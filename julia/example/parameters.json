@@ -1,29 +1,30 @@
 {
   "rng_seed" : 1,
   "L" : 200,
-  
-  "t_final" : 18000.0,
-  "t_output" : 30.0,
 
-  "max_rate_FH" : 0.100,
+  "t_final" : 100000.0,
+  "t_output" : 100.0,
+
+  "max_rate_FH" : 0.01,
   "frac_global_FH" : 0.0,
 
-  "max_rate_AD" : 0.003,
+  "max_rate_AD" : 0.0001,
   "min_rate_frac_AD" : 0.25,
 
-  "max_rate_HD" : 0.003,
-  "min_rate_frac_HD" : 0.10,
+  "max_rate_HD" : 0.00001,
+  "min_rate_frac_HD" : 0.25,
 
-  "rate_DF" : 0.0003,
+  "rate_DF" : 0.001,
 
-  "beta_initial" : 0.100,
-  "sd_log_beta" : 0.10,
-  "rate_beta_change" : 1.0,
+  "p_H_init" : 0.01,
+  "beta_init_mean" : 0.001,
+  "sd_log_beta_init" : 0.001,
+  "sd_log_beta" : 0.01,
 
-  "probability_function_FH" : "FH_A",
+  "probability_function_FH" : "FH_AF",
 
   "enable_animation" : true,
-  "t_animation_frame" : 30.0,
+  "t_animation_frame" : 100.0,
 
   "H_color" : [0.0, 0.6, 0.9],
   "A_color" : [1.0, 0.9, 0.1],
