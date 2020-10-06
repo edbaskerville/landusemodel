@@ -93,7 +93,7 @@ end
 function ModelState(rng, p)
     L = p.L
 
-    state = rand(rng, [H,F], (L, L))
+    state = rand(rng, STATES, (L, L))
     tick_init = fill(Int64(0), (L, L))
 
     is_H = state .== H
@@ -108,6 +108,9 @@ mutable struct Simulation
     rng::MersenneTwister
 
     model_state::ModelState
+    
+    lifetime_counts::Array{Int64}
+    lifetime_sums::Array{Int64}
 
     function Simulation(params::Parameters)
         s = new()
@@ -120,6 +123,8 @@ mutable struct Simulation
 
         s.rng = MersenneTwister(s.params.rng_seed)
         s.model_state = ModelState(s.rng, p)
+        s.lifetime_counts = zeros(Int64, size(STATES))
+        s.lifetime_sums = zeros(Int64, size(STATES))
 
         s
     end
@@ -182,10 +187,10 @@ function sum_over_neighbors(X)
     reshape(sum(map_neighbors(X), dims = 3), size(X))
 end
 
-function draw_transitions(rate, dt)
-    prob = 1.0 .- exp.(-rate * dt)
-    rand(rng, Float64, size(prob)) .< prob
-end
+# function draw_transitions(rate, dt)
+#     prob = 1.0 .- exp.(-rate * dt)
+#     rand(rng, Float64, size(prob)) .< prob
+# end
 
 function step_simulation(s::Simulation, tick::Int64)
     println(tick)
@@ -236,7 +241,7 @@ function step_simulation(s::Simulation, tick::Int64)
     # Perform a step starting from state A for each site
     function step_A()
         rate = p.max_rate_AD * (p.min_rate_frac_AD .+ (1.0 - p.min_rate_frac_AD) * (1.0 .- nn_F ./ 8.0))
-        is_A .* draw_event_happened(rate)
+        is_A .& draw_event_happened(rate)
     end
 
     function productivity_FH_A()
@@ -244,7 +249,7 @@ function step_simulation(s::Simulation, tick::Int64)
         density_A_H = is_H .* (sum_over_neighbors(is_A) ./ 7.0)
 
         # Mean density_A_H over neighbors for sites in state F
-        mean_density_A_H = is_F .* (sum_over_neighbors(density_A_H) ./ 8.0)
+        mean_density_A_H = is_F .& (sum_over_neighbors(density_A_H) ./ 8.0)
 
         mean_density_A_H
     end
@@ -275,9 +280,9 @@ function step_simulation(s::Simulation, tick::Int64)
         # @info "max F->A rate" maximum(rate_FA)
 
         total_rate = rate_FH + rate_FA
-        event_happened = is_F .* draw_event_happened(total_rate)
-        next_state_is_H = event_happened .* (u_state .< rate_FH ./ total_rate )
-        next_state_is_A = event_happened .* (1 .- next_state_is_H)
+        event_happened = is_F .& draw_event_happened(total_rate)
+        next_state_is_H = event_happened .& (u_state .< rate_FH ./ total_rate )
+        next_state_is_A = event_happened .& (1 .- next_state_is_H)
         new_state = next_state_is_H .* Hs + next_state_is_A .* As
 
         new_beta = zeros(Float64, LxL)
@@ -296,7 +301,7 @@ function step_simulation(s::Simulation, tick::Int64)
     end
 
     function step_D()
-        is_D .* draw_event_happened(fill(p.rate_DF, LxL))
+        is_D .& draw_event_happened(fill(p.rate_DF, LxL))
     end
 
     # Compute the new state by doing a simple mask-and-add
@@ -306,9 +311,11 @@ function step_simulation(s::Simulation, tick::Int64)
     changed_A = step_A()
     changed_F, new_state_F, new_beta_FH = step_F()
     changed_D = step_D()
+    
+    changed_by_state = [changed_H, changed_A, changed_F, changed_D]
 
-    unchanged = 1 .- (changed_H + changed_A + changed_F + changed_D)
-    # println(unique(unchanged))
+    changed = changed_H .| changed_A .| changed_F .| changed_D
+    unchanged = 1 .- changed
     @assert all((unchanged .== 0) .| (unchanged .== 1))
 
     new_state = unchanged .* ms.state +
@@ -321,8 +328,14 @@ function step_simulation(s::Simulation, tick::Int64)
     new_beta = exp.(sd_dt * randn(rng, LxL)) .* (
         ms.beta .* (1.0 .- changed_H) + new_beta_FH
     )
-
-    s.model_state = ModelState(new_state, ms.tick_init, new_beta)
+    
+    for state in STATES
+        s.lifetime_counts[state] += sum(changed_by_state[state])
+        s.lifetime_sums[state] += sum(tick .- ms.tick_init[changed_by_state[state]]) * dt
+    end
+    new_tick_init = unchanged .* ms.tick_init + changed .* tick
+    
+    s.model_state = ModelState(new_state, new_tick_init, new_beta)
 end
 
 function init_output(p)
@@ -454,19 +467,6 @@ function make_state_image(s::Simulation)
     convert.(state)
 end
 
-# function get_betas!(s::Simulation)
-#     betas = Vector{Float64}(undef, state_count(s, H))
-#     for (i, loc) in enumerate(s.sites_by_state[H].array)
-#         betas[i] = get_beta!(s, loc)
-#     end
-#     s.max_beta = if length(betas) == 0
-#         0.0
-#     else
-#         maximum(betas)
-#     end
-#     betas
-# end
-
 function make_beta_image(s::Simulation)
     p = s.params
 
@@ -491,8 +491,7 @@ function make_beta_image(s::Simulation)
 end
 
 function get_lifetime_avg(s::Simulation, state::Int64)
-    # s.lifetime_sums[state] / s.lifetime_counts[state]
-    0.0
+    s.lifetime_sums[state] / s.lifetime_counts[state]
 end
 
 function apply_offset(loc, offset, L)
