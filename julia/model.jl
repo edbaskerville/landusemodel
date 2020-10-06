@@ -22,8 +22,9 @@ mutable struct Parameters
     rng_seed::Union{Int64, Nothing}
 
     L::Int64
-
+    
     dt::Float64
+    
     t_final::Float64
     t_output::Float64
 
@@ -35,10 +36,9 @@ mutable struct Parameters
 
     max_rate_HD::Float64
     min_rate_frac_HD::Float64
-
+    
     rate_DF::Float64
-
-    p_H_init::Float64
+    
     beta_init_mean::Float64
     sd_log_beta_init::Float64
     sd_log_beta::Float64
@@ -110,7 +110,7 @@ mutable struct Simulation
     model_state::ModelState
     
     lifetime_counts::Array{Int64}
-    lifetime_sums::Array{Int64}
+    lifetime_sums::Array{Float64}
 
     function Simulation(params::Parameters)
         s = new()
@@ -124,7 +124,7 @@ mutable struct Simulation
         s.rng = MersenneTwister(s.params.rng_seed)
         s.model_state = ModelState(s.rng, p)
         s.lifetime_counts = zeros(Int64, size(STATES))
-        s.lifetime_sums = zeros(Int64, size(STATES))
+        s.lifetime_sums = zeros(Float64, size(STATES))
 
         s
     end
@@ -138,7 +138,10 @@ function simulate(s::Simulation)
     db = init_output(p)
 
     # Repeatedly do events
-    n_ticks = Int64(round(p.t_final / p.dt))
+    @assert p.dt <= 1.0
+    steps_per_t = Int64(round(1.0 / p.dt))
+    
+    n_ticks = p.t_final * steps_per_t
     ticks_per_output = Int64(round(p.t_output / p.dt))
     ticks_per_frame = Int64(round(p.t_animation_frame / p.dt))
 
@@ -155,7 +158,7 @@ function simulate(s::Simulation)
         end
 
         if tick % ticks_per_frame == 0
-            write_animation_frame(s, tick)
+            write_animation_frame(s, tick ÷ ticks_per_frame)
         end
     end
 end
@@ -228,7 +231,7 @@ function step_simulation(s::Simulation, tick::Int64)
     u_state = rand(rng, Float64, LxL)
 
     function draw_event_happened(rate)
-        prob = 1.0 .- exp.(-rate * p.dt)
+        prob = 1.0 .- exp.(-rate * dt)
         u_event .< prob
     end
 
@@ -429,14 +432,13 @@ function write_output(s::Simulation, db::SQLite.DB, tick::Int64)
     ))
 end
 
-function write_animation_frame(s::Simulation, tick::Int64)
-    t = Int64(s.params.dt * tick)
+function write_animation_frame(s::Simulation, frame_id::Int64)
     save(
-        joinpath("state_images", @sprintf("%d.png", t)),
+        joinpath("state_images", @sprintf("%d.png", frame_id)),
         make_state_image(s)
     )
     save(
-        joinpath("beta_images", @sprintf("%d.png", t)),
+        joinpath("beta_images", @sprintf("%d.png", frame_id)),
         make_beta_image(s)
     )
 end
