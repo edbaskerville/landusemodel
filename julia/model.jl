@@ -95,9 +95,10 @@ function ModelState(rng, p)
 
     state = rand(rng, STATES, (L, L))
     tick_init = fill(Int64(0), (L, L))
+
+    is_H = state .== H
     beta = p.beta_init_mean *
-        exp.(p.sd_log_beta_init * randn(rng, (L, L))) *
-        Matrix{Float64}(state .== H)
+        is_H .* exp.(p.sd_log_beta_init * randn(rng, (L, L)))
 
     @assert all(
         map(x -> in(x, STATES), state)
@@ -166,7 +167,7 @@ const NEIGHBOR_OFFSETS = [
 
 function map_neighbors(X)
     # Preallocate array
-    Y = Array{Float64, 3}(undef, Tuple(vcat(collect(size(X)), [8])))
+    Y = Array{valtype(X), 3}(undef, Tuple(vcat(collect(size(X)), [8])))
 
     # Compute circular shift at each offset
     for (i, offset) in enumerate(NEIGHBOR_OFFSETS)
@@ -319,7 +320,7 @@ function step_simulation(s::Simulation, tick::Int64)
         changed_D .* Fs
 
     sd_dt = sqrt(p.sd_log_beta^2 * dt)
-    new_beta = exp(sd_dt * randn(rng, LxL)) * (
+    new_beta = exp(sd_dt * randn(rng, LxL)) .* (
         ms.beta .* (1.0 .- changed_H) + new_beta_FH
     )
 
@@ -467,14 +468,17 @@ end
 
 function make_beta_image(s::Simulation)
     p = s.params
-    betas = s.model_state.beta
 
     bg_color = RGB(p.beta_bg_color...)
 
+    # println(findall((s.model_state.beta .== 0.0) .!= (s.model_state.state .!= H)))
+    # @assert all((s.model_state.beta .== 0.0) .== (s.model_state.state .!= H))
+
+    betas = s.model_state.beta
+    max_beta = maximum(betas)
     function convert(beta)
         if beta > 0.0
-            value01 = clamp01(beta / p.beta_image_max)
-            rgb = p.beta_min_color .+ (p.beta_max_color .- p.beta_min_color) .* value01
+            rgb = p.beta_min_color .+ (p.beta_max_color .- p.beta_min_color) .* (beta / max_beta)
 
             RGB(rgb...)
         else
