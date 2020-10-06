@@ -141,7 +141,7 @@ function simulate(s::Simulation)
     @assert p.dt <= 1.0
     steps_per_t = Int64(round(1.0 / p.dt))
     
-    n_ticks = p.t_final * steps_per_t
+    n_ticks = Int64(round(p.t_final * steps_per_t))
     ticks_per_output = Int64(round(p.t_output / p.dt))
     ticks_per_frame = Int64(round(p.t_animation_frame / p.dt))
 
