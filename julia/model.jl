@@ -471,6 +471,7 @@ end
 
 function make_beta_image(s::Simulation)
     p = s.params
+    is_H = s.model_state.state .== H
 
     bg_color = RGB(p.beta_bg_color...)
 
@@ -478,10 +479,11 @@ function make_beta_image(s::Simulation)
     # @assert all((s.model_state.beta .== 0.0) .== (s.model_state.state .!= H))
 
     betas = s.model_state.beta
-    max_beta = maximum(betas)
+    qbetas = quantile(betas[is_H], [0.05, 0.95])
     function convert(beta)
         if beta > 0.0
-            rgb = p.beta_min_color .+ (p.beta_max_color .- p.beta_min_color) .* (beta / max_beta)
+            val01 = clamp((beta - qbetas[1]) / (qbetas[2] - qbetas[1]), 0, 1)
+            rgb = p.beta_min_color .+ (p.beta_max_color .- p.beta_min_color) .* val01
 
             RGB(rgb...)
         else
