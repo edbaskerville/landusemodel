@@ -93,7 +93,7 @@ end
 function ModelState(rng, p)
     L = p.L
 
-    state = rand(rng, STATES, (L, L))
+    state = rand(rng, [H,F], (L, L))
     tick_init = fill(Int64(0), (L, L))
 
     is_H = state .== H
@@ -229,13 +229,13 @@ function step_simulation(s::Simulation, tick::Int64)
 
     # Perform a step starting from state H for each site
     function step_H()
-        rate = p.min_rate_frac_HD .+ (1.0 - p.min_rate_frac_HD) * (1.0 .- nn_A ./ 8.0)
+        rate = p.max_rate_HD * (p.min_rate_frac_HD .+ (1.0 - p.min_rate_frac_HD) * (1.0 .- nn_A ./ 8.0))
         is_H .* draw_event_happened(rate)
     end
 
     # Perform a step starting from state A for each site
     function step_A()
-        rate = p.min_rate_frac_AD .+ (1.0 - p.min_rate_frac_AD) * (1.0 .- nn_F ./ 8.0)
+        rate = p.max_rate_AD * (p.min_rate_frac_AD .+ (1.0 - p.min_rate_frac_AD) * (1.0 .- nn_F ./ 8.0))
         is_A .* draw_event_happened(rate)
     end
 
@@ -269,8 +269,10 @@ function step_simulation(s::Simulation, tick::Int64)
             productivity_FH_AF()
         end
         rate_FH = p.max_rate_FH * productivity
+        # @info "max F->H rate" maximum(rate_FH)
 
         rate_FA = sum_over_neighbors(ms.beta) ./ 8.0
+        # @info "max F->A rate" maximum(rate_FA)
 
         total_rate = rate_FH + rate_FA
         event_happened = is_F .* draw_event_happened(total_rate)
@@ -402,7 +404,7 @@ function write_output(s::Simulation, db::SQLite.DB, tick::Int64)
             t_output, # time
             sum(ms.state .== H),
             get_lifetime_avg(s, H),
-            sum(ms.state .== H),
+            sum(ms.state .== A),
             get_lifetime_avg(s, A),
             sum(ms.state .== F),
             get_lifetime_avg(s, F),
@@ -415,12 +417,13 @@ function write_output(s::Simulation, db::SQLite.DB, tick::Int64)
 end
 
 function write_animation_frame(s::Simulation, tick::Int64)
+    t = Int64(s.params.dt * tick)
     save(
-        joinpath("state_images", @sprintf("%d.png", tick)),
+        joinpath("state_images", @sprintf("%d.png", t)),
         make_state_image(s)
     )
     save(
-        joinpath("beta_images", @sprintf("%d.png", tick)),
+        joinpath("beta_images", @sprintf("%d.png", t)),
         make_beta_image(s)
     )
 end
