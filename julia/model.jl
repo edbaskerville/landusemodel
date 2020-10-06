@@ -100,10 +100,6 @@ function ModelState(rng, p)
     beta = p.beta_init_mean *
         is_H .* exp.(p.sd_log_beta_init * randn(rng, (L, L)))
 
-    @assert all(
-        map(x -> in(x, STATES), state)
-    )
-
     ModelState(state, tick_init, beta)
 end
 
@@ -320,7 +316,7 @@ function step_simulation(s::Simulation, tick::Int64)
         changed_D .* Fs
 
     sd_dt = sqrt(p.sd_log_beta^2 * dt)
-    new_beta = exp(sd_dt * randn(rng, LxL)) .* (
+    new_beta = exp.(sd_dt * randn(rng, LxL)) .* (
         ms.beta .* (1.0 .- changed_H) + new_beta_FH
     )
 
@@ -375,45 +371,47 @@ end
 
 function write_output(s::Simulation, db::SQLite.DB, tick::Int64)
     p = s.params
+    ms = s.model_state
     t_output = tick * p.dt
 
     println("Outputting at ", t_output)
 
-    # beta_mean = mean(betas)
-    # beta_sd = std(betas, corrected = false)
-    # beta_min = if length(betas) == 0
-    #     NaN
-    # else
-    #     minimum(betas)
-    # end
-    # beta_max = if length(betas) == 0
-    #     NaN
-    # else
-    #     maximum(betas)
-    # end
-    # beta_quantiles = if length(betas) == 0
-    #     repeat([NaN], 9)
-    # else
-    #     quantile(betas, [0.025, 0.05, 0.10, 0.25, 0.5, 0.75, 0.9, 0.95, 0.975])
-    # end
-    #
-    # DBInterface.execute(db, """
-    #     INSERT INTO output VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    # """, vcat(
-    #     [
-    #         t_output, # time
-    #         state_count(s, H),
-    #         get_lifetime_avg(s, H),
-    #         state_count(s, A),
-    #         get_lifetime_avg(s, A),
-    #         state_count(s, F),
-    #         get_lifetime_avg(s, F),
-    #         state_count(s, D),
-    #         get_lifetime_avg(s, D)
-    #     ],
-    #     [beta_mean, beta_sd, beta_min, beta_max],
-    #     beta_quantiles
-    # ))
+    betas = ms.beta[findall(ms.state .== H)]
+    beta_mean = mean(betas)
+    beta_sd = std(betas, corrected = false)
+    beta_min = if length(betas) == 0
+        NaN
+    else
+        minimum(betas)
+    end
+    beta_max = if length(betas) == 0
+        NaN
+    else
+        maximum(betas)
+    end
+    beta_quantiles = if length(betas) == 0
+        repeat([NaN], 9)
+    else
+        quantile(betas, [0.025, 0.05, 0.10, 0.25, 0.5, 0.75, 0.9, 0.95, 0.975])
+    end
+
+    DBInterface.execute(db, """
+        INSERT INTO output VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    """, vcat(
+        [
+            t_output, # time
+            sum(ms.state .== H),
+            get_lifetime_avg(s, H),
+            sum(ms.state .== H),
+            get_lifetime_avg(s, A),
+            sum(ms.state .== F),
+            get_lifetime_avg(s, F),
+            sum(ms.state .== D),
+            get_lifetime_avg(s, D)
+        ],
+        [beta_mean, beta_sd, beta_min, beta_max],
+        beta_quantiles
+    ))
 end
 
 function write_animation_frame(s::Simulation, tick::Int64)
@@ -490,7 +488,8 @@ function make_beta_image(s::Simulation)
 end
 
 function get_lifetime_avg(s::Simulation, state::Int64)
-    s.lifetime_sums[state] / s.lifetime_counts[state]
+    # s.lifetime_sums[state] / s.lifetime_counts[state]
+    0.0
 end
 
 function apply_offset(loc, offset, L)
