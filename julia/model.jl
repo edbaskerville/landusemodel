@@ -252,7 +252,7 @@ function step_simulation(s::Simulation, tick::Int64)
         density_A_H = is_H .* (sum_over_neighbors(is_A) ./ 7.0)
 
         # Mean density_A_H over neighbors for sites in state F
-        mean_density_A_H = is_F .& (sum_over_neighbors(density_A_H) ./ 8.0)
+        mean_density_A_H = is_F .* (sum_over_neighbors(density_A_H) ./ 8.0)
 
         mean_density_A_H
     end
