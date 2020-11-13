@@ -1,0 +1,39 @@
+{
+  "rng_seed" : 1,
+  "L" : 200,
+
+  "dt" : 0.08333,
+  
+  "t_final" : 150,
+  "t_output" : 1.0,
+
+  "max_rate_FH" : 20,
+  "frac_global_FH" : 0.01,
+
+  "max_rate_AD" : 0.1,
+  "min_rate_frac_AD" : 0.25,
+
+  "max_rate_HD" : 0.05,
+  "min_rate_frac_HD" : 0.001,
+  
+  "rate_DF" : 0.02,
+  
+  "beta_init_mean" : 0.4,
+  "sd_log_beta_init" : 0.001,
+  "sd_log_beta" : 0.1,
+
+  "productivity_function_FH" : "FH_AF",
+
+  "enable_animation" : true,
+  "t_animation_frame" : 1,
+
+  "H_color" : [0.0, 0.6, 0.9],
+  "A_color" : [1.0, 0.9, 0.1],
+  "F_color" : [0.1, 0.6, 0.1],
+  "D_color" : [0.6, 0.5, 0.2],
+
+  "beta_bg_color" : [0.9, 0.9, 0.9],
+  "beta_min_color" : [0.5, 0.1, 0.1],
+  "beta_max_color" : [0.99, 0.1, 0.1],
+  "beta_image_max" : 0.2
+}
