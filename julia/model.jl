@@ -157,7 +157,7 @@ function simulate(s::Simulation)
             write_output(s, db, tick)
         end
 
-        if tick % ticks_per_frame == 0
+        if p.enable_animation && (tick % ticks_per_frame == 0)
             write_animation_frame(s, tick ÷ ticks_per_frame)
         end
     end
@@ -196,7 +196,7 @@ end
 # end
 
 function step_simulation(s::Simulation, tick::Int64)
-    println(tick)
+#     println(tick)
 
     p = s.params
     rng = s.rng
