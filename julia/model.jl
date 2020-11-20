@@ -249,12 +249,19 @@ function step_simulation(s::Simulation, tick::Int64)
 
     function productivity_FH_A()
         # Density of A for locations in state H (assumes one neighbor is F)
+        # (zeros for locations not in state H)
         density_A_H = is_H .* (sum_over_neighbors(is_A) ./ 7.0)
 
         # Mean density_A_H over neighbors for sites in state F
         mean_density_A_H = is_F .* (sum_over_neighbors(density_A_H) ./ 8.0)
 
-        mean_density_A_H
+        # Mean density_A_H over all sites (except the one in question)
+        mean_density_A_H_global = sum(density_A_H) / (p.L * p.L - 1) * is_F
+        
+        (
+            (1.0 - p.frac_global_FH) * mean_density_A_H,
+            p.frac_global_FH * mean_density_A_H_global
+        )
     end
 
     function productivity_FH_AF()
@@ -267,37 +274,44 @@ function step_simulation(s::Simulation, tick::Int64)
         # Mean density_F_A_H over neighbors for sites in state F
         mean_density_F_A_H = is_F .* (sum_over_neighbors(density_F_A_H) ./ 8.0)
 
-        mean_density_F_A_H
+        # Mean density_F_A_H over all sites (except the one in question)
+        mean_density_F_A_H_global = sum(density_F_A_H) / (p.L * p.L - 1) * is_F
+        
+        (
+            (1.0 - p.frac_global_FH) * mean_density_F_A_H,
+            p.frac_global_FH * mean_density_F_A_H_global
+        )
     end
 
     function step_F()
-        productivity = if p.productivity_function_FH == FH_A
+        prod_local, prod_global = if p.productivity_function_FH == FH_A
             productivity_FH_A()
         else
             productivity_FH_AF()
         end
-        rate_FH = p.max_rate_FH * productivity
-        # @info "max F->H rate" maximum(rate_FH)
-
+        prod_total = prod_local + prod_global
+        rate_FH = p.max_rate_FH * prod_total
+        
         rate_FA = sum_over_neighbors(ms.beta) ./ 8.0
-        # @info "max F->A rate" maximum(rate_FA)
 
         total_rate = rate_FH + rate_FA
         event_happened = is_F .& draw_event_happened(total_rate)
         next_state_is_H = event_happened .& (u_state .< rate_FH ./ total_rate )
         next_state_is_A = event_happened .& (1 .- next_state_is_H)
         new_state = next_state_is_H .* Hs + next_state_is_A .* As
-
+        
         new_beta = zeros(Float64, LxL)
+        all_betas = ms.beta[is_H]
         for ind in findall(next_state_is_H)
-            # println(ind)
-            # println(get_neighbors(is_H, ind))
-            # println(rate_FH[ind])
-            H_neighbor_indices = findall(get_neighbors(is_H, ind))
-            # println(H_neighbor_indices)
-            neighbor_betas = get_neighbors(ms.beta, ind)[H_neighbor_indices]
-
-            new_beta[ind] = rand(rng, neighbor_betas)
+            if rand(rng) < prod_local[ind] / prod_total[ind]
+                # If it was a local colonization event, copy beta from neighbor
+                H_neighbor_indices = findall(get_neighbors(is_H, ind))
+                neighbor_betas = get_neighbors(ms.beta, ind)[H_neighbor_indices]
+                new_beta[ind] = rand(rng, neighbor_betas)
+            else
+                # Otherwise, copy random beta from anywhere on the lattice
+                new_beta[ind] = rand(rng, all_betas)    
+            end
         end
 
         (event_happened, new_state, new_beta)
