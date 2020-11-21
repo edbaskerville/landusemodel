@@ -3,7 +3,7 @@ library(RSQLite)
 library(dplyr)
 library(magrittr)
 library(ggplot2)
-setwd("c:/Users/Andres/Documents/GitHub/landusemodel/julia/20-11-19/")
+# setwd("c:/Users/Andres/Documents/GitHub/landusemodel/julia/20-11-19/")
 
 
 
@@ -13,7 +13,7 @@ params <- tbl(db_conn, 'runs') %>%  collect()
 results=inner_join(x = params, y = output_1,by="run_id")
 dbDisconnect(db_conn)
 
-setwd("c:/Users/Andres/Documents/GitHub/landusemodel/julia/20-11-16/")
+# setwd("c:/Users/Andres/Documents/GitHub/landusemodel/julia/20-11-16/")
 
 
 
