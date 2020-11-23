@@ -1,0 +1,95 @@
+---
+title: "Plots for test experiment"
+output: html_notebook
+---
+
+## Preamble
+
+```{r}
+library(DBI)
+library(RSQLite)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+```
+
+## Connect to DB and load summary across replicates at final timepoint
+
+```{r}
+L <- 200
+L2 <- L * L
+
+# The body is inside a function that gets executed once.
+# The purpose of this trick is to limit the scope of temporary variables:
+# they only exist inside the function.
+# (`db_conn` and `runs` do not exist after running this code.)
+output_last <- (function() {
+  db_conn <- dbConnect(SQLite(), 'db.sqlite')
+  runs <- dbGetQuery(db_conn,
+    'SELECT run_id, productivity_function_FH AS prod_func, max_rate_FH, frac_global_FH, max_rate_AD, min_rate_frac_AD, rate_DF FROM runs'
+  )
+  
+  df <- dbGetQuery(db_conn,
+    'SELECT run_id, H, A, F, D, beta_mean FROM output WHERE time = 150.0'
+  ) %>%
+    left_join(runs, by = 'run_id') %>%
+    mutate(H = H / L2, A = A / L2, F = F / L2, D = D / L2)
+  dbDisconnect(db_conn)
+  
+  df
+})()
+
+summary <- output_last %>%
+  group_by(prod_func, max_rate_FH, frac_global_FH, max_rate_AD, min_rate_frac_AD, rate_DF) %>%
+  summarize(H = mean(H), A = mean(A), F = mean(F), D = mean(D), beta_mean = mean(beta_mean))
+```
+
+## Plot function
+
+This function constructs `facet_wrap` code (via string formatting) for a particular parameter
+on the x axis and a particular measurement on the y axis, and then executes it
+(via `eval(parse(...))`).
+
+All combinations of other parameters are used as facet variables.
+
+Plots are saved as `{y_var}_{x_var}.pdf` in the `plots` directory.
+
+```{r}
+if(!dir.exists('plots')) {
+  dir.create('plots')
+}
+x_vars <- c('max_rate_FH', 'frac_global_FH', 'max_rate_AD', 'min_rate_frac_AD', 'rate_DF')
+y_vars <- c('beta_mean', 'H', 'A', 'F', 'D')
+plot_relationship <- function(x_var, y_var) {
+  x_vars_str = paste(x_vars[x_vars != x_var], collapse = ', ')
+  p <- eval(parse(text = str_glue(
+    "ggplot(output_last, aes(x = factor({x_var}), y = {y_var}, color = prod_func)) +
+      geom_boxplot(outlier.size = 0) +
+      geom_point(position=position_jitterdodge(), size = 0.1) +
+      facet_wrap(vars({x_vars_str}), ncol = 8, labeller = labeller(.rows = label_both)) +
+      xlab('{x_var}') +
+      ylab('{y_var}')
+    "
+  )))
+  
+  n_combos = nrow(summary) / length(unique(unlist(summary[, x_var]))) / 2
+  n_rows = ceiling(n_combos / 8)
+  
+  ggsave(
+    file.path('plots', str_glue('{y_var}-{x_var}.pdf')), p,
+    width = 20, height = 20 * n_rows / 8
+  )
+  p
+}
+```
+
+
+## Plot all x_var vs. y_var relationships
+
+```{r}
+for(x_var in x_vars) {
+  for(y_var in y_vars) {
+    plot_relationship(x_var, y_var)
+  }
+}
+```
