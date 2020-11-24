@@ -1,6 +1,8 @@
 ---
 title: "Plots for test experiment"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 ## Preamble
@@ -30,7 +32,7 @@ output_last <- (function() {
   )
   
   df <- dbGetQuery(db_conn,
-    'SELECT run_id, H, A, F, D, beta_mean FROM output WHERE time = 150.0'
+    'SELECT run_id, H, A, F, D, H_lifetime_avg, A_lifetime_avg, F_lifetime_avg,D_lifetime_avg, beta_mean FROM output WHERE time = 150.0'
   ) %>%
     left_join(runs, by = 'run_id') %>%
     mutate(H = H / L2, A = A / L2, F = F / L2, D = D / L2)
@@ -41,7 +43,13 @@ output_last <- (function() {
 
 summary <- output_last %>%
   group_by(prod_func, max_rate_FH, frac_global_FH, max_rate_AD, min_rate_frac_AD, rate_DF) %>%
-  summarize(H = mean(H), A = mean(A), F = mean(F), D = mean(D), beta_mean = mean(beta_mean))
+  summarize(H = mean(H), A = mean(A), F = mean(F), D = mean(D), 
+            beta_mean = mean(beta_mean),
+            H_lifetime_avg=mean(H_lifetime_avg),
+            A_lifetime_avg=mean(A_lifetime_avg),
+            F_lifetime_avg=mean(F_lifetime_avg),
+            D_lifetime_avg=mean(D_lifetime_avg)
+            )
 ```
 
 ## Plot function
@@ -59,7 +67,7 @@ if(!dir.exists('plots')) {
   dir.create('plots')
 }
 x_vars <- c('max_rate_FH', 'frac_global_FH', 'max_rate_AD', 'min_rate_frac_AD', 'rate_DF')
-y_vars <- c('beta_mean', 'H', 'A', 'F', 'D')
+y_vars <- c('beta_mean', 'H', 'A', 'F', 'D','H_lifetime_avg','A_lifetime_avg','F_lifetime_avg','D_lifetime_avg')
 plot_relationship <- function(x_var, y_var) {
   x_vars_str = paste(x_vars[x_vars != x_var], collapse = ', ')
   p <- eval(parse(text = str_glue(
