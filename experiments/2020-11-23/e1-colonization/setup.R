@@ -25,7 +25,7 @@ PARAM_VALS <- list(
   
   # Maximum colonization rate of a patch of forest
   # 5 to 40 by 5 (8 values)
-  max_rate_FH = seq(5, 40, 5)
+  max_rate_FH = seq(5, 40, 5),
   
   # Rate of forest recovery from degraded state.
   # Corresponds to mean forest recovery time in years: 100, 50, 25, 10
