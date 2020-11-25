@@ -1,0 +1,53 @@
+---
+title: "Stationarity test"
+output: html_notebook
+---
+
+## Preamble
+
+```{r message=FALSE}
+library(DBI)
+library(RSQLite)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+```
+
+## Load all data
+
+```{r}
+load_table <- function(tbl_name) {
+  db <- dbConnect(SQLite(), 'db.sqlite')
+  tbl <- dbGetQuery(db, str_glue('SELECT * FROM {tbl_name}'))
+  dbDisconnect(db)
+  
+  tbl
+}
+```
+
+
+```{r}
+output <- load_table('output')
+runs <- load_table('runs') %>% filter(rate_DF == 0.1 & max_rate_AD < 0.6 & min_rate_frac_AD < 0.5)
+output_runs <- runs %>% left_join(output, 'run_id')
+```
+
+## Just plot 'em all
+
+```{r}
+p <- ggplot(output_runs, aes(x = time, y = H, color = productivity_function_FH)) +
+  geom_line() +
+  facet_grid(rows = vars(max_rate_AD), cols = vars(min_rate_frac_AD), labeller = labeller(.rows = label_both, .cols = label_both))
+ggsave('e2-H_over_time.pdf', p, width = 15, height = 15)
+p
+```
+
+```{r}
+p <- ggplot(output_runs, aes(x = time, y = beta_500, color = productivity_function_FH)) +
+  geom_line() +
+  facet_grid(rows = vars(max_rate_AD), cols = vars(min_rate_frac_AD), labeller = labeller(.rows = label_both, .cols = label_both))
+ggsave('e2-beta_over_time.pdf', p, width = 15, height = 15)
+p
+```
+
+
