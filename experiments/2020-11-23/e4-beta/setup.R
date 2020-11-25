@@ -19,14 +19,14 @@ N_REPLICATES <- 1
 LOCAL <- TRUE
 
 PARAM_VALS <- list(
-  beta_init_mean = seq(0.2, 0.8, 0.2),
-  sd_log_beta = c(0.1, 0.2, 0.4, 0.8),
   
   replicate_id = 1:N_REPLICATES,
   
   # FH_A: conversion F->H depends on agriculture around humans
   # FH_AF: conversion F->H depends on forest around agriculture around humans
   productivity_function_FH = c('FH_A', 'FH_AF'),
+  beta_init_mean = seq(0.2, 0.8, 0.2),
+  sd_log_beta = c(0.1, 0.2, 0.4, 0.8)
 )
 
 # Starting point for run config.json files
