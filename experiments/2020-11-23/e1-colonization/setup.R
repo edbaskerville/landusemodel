@@ -10,11 +10,13 @@ library(RSQLite)
 ROOT_PATH <- normalizePath(file.path('..', '..', '..', 'julia'))
 RUN_EXEC_PATH <- file.path(ROOT_PATH, 'main.jl')
 
-N_JOBS <- 100
+N_JOBS <- 1
 MAX_CORES_PER_JOB <- 14
 MINUTES_PER_RUN <- 15
 
 N_REPLICATES <- 1
+
+LOCAL <- TRUE
 
 PARAM_VALS <- list(
   replicate_id = 1:N_REPLICATES,
@@ -129,7 +131,7 @@ main <- function() {
 }
 
 
-# Wrapper for srun wrapper script to capture output
+# Wrapper for wrapper script to capture output
 
 SRUN_WRAPPER_TEMPLATE = '#!/bin/bash
 
@@ -240,7 +242,7 @@ module purge
 module load parallel
 module load julia
 
-parallel --delay 0.2 -j $SLURM_NTASKS --joblog runlog.txt --resume < runs.sh
+parallel --delay 0.2 -j {MAX_CORES_PER_JOB} --joblog runlog.txt --resume < runs.sh
 '
 
 write_job_script <- function(jobs_path, job_id, run_ids) {
@@ -254,7 +256,8 @@ write_job_script <- function(jobs_path, job_id, run_ids) {
   
   write(
     str_flatten(sapply(run_ids, function(run_id) {
-      str_glue('srun --exclusive -N1 -n1 {runs_path}/{run_id}/srun_wrapper.sh')
+      prefix <- if(LOCAL) '' else 'srun --exclusive -N1 -n1 '
+      str_glue('{prefix}{runs_path}/{run_id}/srun_wrapper.sh')
     }), collapse = '\n'),
     file.path(job_path, 'runs.sh')
   )
