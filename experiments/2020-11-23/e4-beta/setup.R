@@ -11,7 +11,7 @@ ROOT_PATH <- normalizePath(file.path('..', '..', '..', 'julia'))
 RUN_EXEC_PATH <- file.path(ROOT_PATH, 'main.jl')
 
 N_JOBS <- 1
-MAX_CORES_PER_JOB <- 14
+MAX_CORES_PER_JOB <- 16
 MINUTES_PER_RUN <- 15
 
 N_REPLICATES <- 1
@@ -25,8 +25,8 @@ PARAM_VALS <- list(
   # FH_A: conversion F->H depends on agriculture around humans
   # FH_AF: conversion F->H depends on forest around agriculture around humans
   productivity_function_FH = c('FH_A', 'FH_AF'),
-  beta_init_mean = seq(0.2, 0.8, 0.2),
-  sd_log_beta = c(0.1, 0.2, 0.4, 0.8)
+  beta_init_mean = seq(0.1, 0.5, 0.1),
+  sd_log_beta = c(0.0, 0.1, 0.2, 0.5, 1.0)
 )
 
 # Starting point for run config.json files
