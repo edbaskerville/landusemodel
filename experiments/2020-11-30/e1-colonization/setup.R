@@ -7,6 +7,10 @@ library(stringr)
 library(DBI)
 library(RSQLite)
 
+escape_backslashes <- function(path) {
+  str.replace(path, fixed('\\'), '\\\\')
+}
+
 MODEL_SCRIPT_PATH <- normalizePath(file.path('..', '..', '..', 'julia', 'main.jl'))
 N_JOBS <- 1
 MAX_CORES_PER_JOB <- 2
@@ -124,13 +128,13 @@ main <- function() {
 
 # Template for script to perform a single run
 RUN_SCRIPT_TEMPLATE = 'RUN_ID <- {run_id}
-RUN_DIR <- "{run_dir}"
+RUN_DIR <- "{escape_backslashes(run_dir)}"
 setwd(RUN_DIR)
 
 # Actually run things
 system2(
   "julia",
-  c("{MODEL_SCRIPT_PATH}", file.path(RUN_DIR, "config.json")),
+  c("{escape_backslashes(MODEL_SCRIPT_PATH)}", file.path(RUN_DIR, "config.json")),
   stdout = "stdout.txt",
   stderr = "stderr.txt"
 )
@@ -212,12 +216,12 @@ module purge
 module load R
 module load julia
 
-Rscript "{run_job_path}"
+Rscript "{escape_backslashes(run_job_path)}"
 '
 
 # Template for job script file
 JOB_SCRIPT_TEMPLATE <- '
-RUNS_PATH <- "{runs_path}"
+RUNS_PATH <- "{escape_backslashes(runs_path)}"
 RUN_IDS <- c({run_ids_str})
 
 library(doParallel)
