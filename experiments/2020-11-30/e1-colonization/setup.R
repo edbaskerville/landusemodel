@@ -134,7 +134,7 @@ setwd(RUN_DIR)
 # Actually run things
 system2(
   "julia",
-  c("{escape_backslashes(MODEL_SCRIPT_PATH)}", file.path(RUN_DIR, "config.json")),
+  c("-p", "1", "--", "{escape_backslashes(MODEL_SCRIPT_PATH)}", file.path(RUN_DIR, "config.json")),
   stdout = "stdout.txt",
   stderr = "stderr.txt"
 )
