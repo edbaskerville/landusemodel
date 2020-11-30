@@ -8,7 +8,7 @@ library(DBI)
 library(RSQLite)
 
 escape_backslashes <- function(path) {
-  str.replace(path, fixed('\\'), '\\\\')
+  str_replace(path, fixed('\\'), '\\\\')
 }
 
 MODEL_SCRIPT_PATH <- normalizePath(file.path('..', '..', '..', 'julia', 'main.jl'))
