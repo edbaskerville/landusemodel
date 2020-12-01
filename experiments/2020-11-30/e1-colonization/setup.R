@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 ROOT_PATH <- normalizePath(file.path('..', '..', '..'))
 
 N_JOBS <- 1

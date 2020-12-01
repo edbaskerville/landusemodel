@@ -1,4 +1,5 @@
-MODEL_SCRIPT_PATH <- normalizePath(ROOT_PATH, 'julia', 'main.jl'))
+EXPERIMENT_PATH <- normalizePath('.')
+MODEL_SCRIPT_PATH <- normalizePath(ROOT_PATH, 'julia', 'main.jl')
 
 library(jsonlite)
 library(dplyr)
@@ -68,7 +69,7 @@ system2(
 )
 
 # Plot things
-source(file.path("{escape_backslashes(ROOT_PATH)}", "plot_run.R"))
+source(file.path("{escape_backslashes(EXPERIMENT_PATH)}", "plot_run.R"))
 '
 
 set_up_run <- function(run_row) {
