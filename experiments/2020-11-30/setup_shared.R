@@ -1,3 +1,5 @@
+MODEL_SCRIPT_PATH <- normalizePath(ROOT_PATH, 'julia', 'main.jl'))
+
 library(jsonlite)
 library(dplyr)
 library(tidyr)
@@ -64,6 +66,9 @@ system2(
   stdout = "stdout.txt",
   stderr = "stderr.txt"
 )
+
+# Plot things
+source(file.path("{escape_backslashes(ROOT_PATH)}", "plot_run.R"))
 '
 
 set_up_run <- function(run_row) {
@@ -190,33 +195,6 @@ write_job_script <- function(jobs_path, job_id, run_ids) {
     file.path(job_path, 'job.sbatch')
   )
 }
-
-# write_job_script <- function(jobs_path, job_id, run_ids) {
-#   n_runs <- length(run_ids)
-#   runs_path <- normalizePath('runs')
-#   
-#   job_path <- file.path(jobs_path, str_glue('{job_id}'))
-#   dir.create(job_path)
-#   
-#   run_ids_str <- str_flatten(run_ids, collapse = ' ')
-#   
-#   write(
-#     str_flatten(sapply(run_ids, function(run_id) {
-#       prefix <- if(LOCAL) '' else 'srun --exclusive -N1 -n1 '
-#       str_glue('{prefix}{runs_path}/{run_id}/run.R')
-#     }), collapse = '\n'),
-#     file.path(job_path, 'runs.sh')
-#   )
-#   
-#   job_script_path <- file.path(job_path, 'job.sbatch')
-#   n_cores <- min(n_runs, MAX_CORES_PER_JOB)
-#   time_minutes <- MINUTES_PER_RUN * ceiling(n_runs / n_cores)
-#   write(
-#     str_glue(JOB_SCRIPT_TEMPLATE),
-#     job_script_path
-#   )
-#   system(str_glue('chmod +x {job_script_path}'))
-# }
 
 # Template for submit script
 SUBMIT_SCRIPT_TEMPLATE <- '#!/bin/bash
