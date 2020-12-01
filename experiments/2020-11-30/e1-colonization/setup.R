@@ -1,4 +1,5 @@
-MODEL_SCRIPT_PATH <- normalizePath(file.path('..', '..', '..', 'julia', 'main.jl'))
+ROOT_PATH <- normalizePath(file.path('..', '..', '..'))
+
 N_JOBS <- 1
 MAX_CORES_PER_JOB <- 2
 MINUTES_PER_RUN <- 15
@@ -52,9 +53,9 @@ BASE_CONFIG <- list(
   # Beta initial value, standard deviation, random walk.
   # Maybe more initial variance would be good?
   # sd_log_beta = 0.1 means a about a 10% change per year.
-  beta_init_mean = 0.4,
-  sd_log_beta_init = 0.001,
-  sd_log_beta = 0.1,
+  beta_init_mean = 0.5,
+  sd_beta_init = 0.5,
+  sd_beta = 1.0,
   
   enable_animation = FALSE,
   t_animation_frame = 1,
