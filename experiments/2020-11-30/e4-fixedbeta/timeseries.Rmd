@@ -54,7 +54,7 @@ ggplot(output1, aes(x = time, y = H)) +
 ```{r}
 p <- ggplot(output_runs, aes(x = time, y = H, color = productivity_function_FH)) +
   geom_line() +
-  facet_grid(rows = vars(max_rate_FH), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))
+  facet_grid(rows = vars(beta_init_mean), labeller = labeller(.rows = label_both, .cols = label_both))
 ggsave('e1-H_over_time.pdf', p, width = 15, height = 15)
 p
 ```
@@ -65,7 +65,7 @@ p <- ggplot(output_runs, aes(
   )) +
   geom_ribbon(fill = 'lightgray', color = 'lightgray') +
   geom_line() +
-  facet_grid(rows = vars(max_rate_FH), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))
+  facet_grid(rows = vars(beta_init_mean), labeller = labeller(.rows = label_both, .cols = label_both))
 ggsave('e1-beta_over_time.pdf', p, width = 15, height = 15)
 p
 ```
