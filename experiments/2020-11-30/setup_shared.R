@@ -69,7 +69,7 @@ system2(
 )
 
 # Plot things
-source(file.path("{escape_backslashes(EXPERIMENT_PATH)}", "plot_run.R"))
+source(file.path("{escape_backslashes(EXPERIMENT_SUPER)}", "plot_run.R"))
 '
 
 set_up_run <- function(run_row) {
