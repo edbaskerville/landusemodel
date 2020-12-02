@@ -2,8 +2,8 @@
 
 ROOT_PATH <- normalizePath(file.path('..', '..', '..'))
 
-N_JOBS <- 1
-MAX_CORES_PER_JOB <- 16
+N_JOBS <- 100
+MAX_CORES_PER_JOB <- 14
 MINUTES_PER_RUN <- 15
 
 N_REPLICATES <- 1
