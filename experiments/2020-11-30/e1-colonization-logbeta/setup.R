@@ -52,7 +52,7 @@ BASE_CONFIG <- list(
   # Beta initial value, standard deviation, random walk.
   beta_init_mean = 0.5,
   sd_beta_init = 0.5,
-  sd_beta = 1.0,
+  sd_log_beta = 0.1,
   
   enable_animation = FALSE,
   t_animation_frame = 1,

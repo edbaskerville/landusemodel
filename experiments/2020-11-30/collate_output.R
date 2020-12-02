@@ -29,7 +29,7 @@ main <- function() {
   dbExecute(db, 'COMMIT')
   
   for(run_id in sort(run_ids())) {
-    cat(str_glue('Processing {run_id}...\n'))
+    cat(sprintf('Processing %s...\n', run_id))
     
     run_db_path <- db_path(run_id)
     dbExecute(db, str_glue('ATTACH DATABASE "{escape_backslashes(run_db_path)}" AS src'))
