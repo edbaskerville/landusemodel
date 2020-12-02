@@ -1,4 +1,4 @@
-EXPERIMENT_PATH <- normalizePath('.')
+EXPERIMENT_SUPER <- normalizePath('..')
 MODEL_SCRIPT_PATH <- normalizePath(file.path(ROOT_PATH, 'julia', 'main.jl'))
 
 library(jsonlite)

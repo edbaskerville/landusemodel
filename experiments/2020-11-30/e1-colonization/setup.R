@@ -53,8 +53,6 @@ BASE_CONFIG <- list(
   min_rate_frac_HD = 0.001,
   
   # Beta initial value, standard deviation, random walk.
-  # Maybe more initial variance would be good?
-  # sd_log_beta = 0.1 means a about a 10% change per year.
   beta_init_mean = 0.5,
   sd_beta_init = 0.5,
   sd_beta = 1.0,
