@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 library(ggplot2)
 library(dplyr)
 library(tidyr)
@@ -22,8 +24,9 @@ main <- function() {
     geom_line()
   ggsave('state_over_time.pdf', p_HAF)
   
-  p_beta <- ggplot(output, aes(x = time, y = beta_500)) +
-    geom_line()
+  p_beta <- ggplot(output, aes(x = time)) +
+    geom_line(aes(y = log(beta_mean)), color = 'blue') +
+    geom_line(aes(y = log(beta_500)), color = 'red')
   ggsave('beta.pdf', p_beta)
   
   dbDisconnect(db)
