@@ -22,7 +22,7 @@ PARAM_VALS <- list(
   rate_DF = c(0.05, 0.10, 0.15, 0.20),
   
   # Fixed beta
-  beta_init_mean = c(0.001, 0.01, 0.1, 1.0, 10.0)
+  beta_init_mean = c(0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0)
 )
 
 # Starting point for run config.json files
@@ -33,6 +33,8 @@ BASE_CONFIG <- list(
   
   t_final = 300,
   t_output = 1,
+  
+  init_H_frac = 0.01,
   
   # Fraction of colonizations that come from anywhere on the lattice
   # (Need to explore a wider range of values)

@@ -27,6 +27,8 @@ mutable struct Parameters
     
     t_final::Float64
     t_output::Float64
+    
+    init_H_frac::Float64
 
     max_rate_FH::Float64
     frac_global_FH::Float64
@@ -94,8 +96,11 @@ end
 
 function ModelState(rng, p)
     L = p.L
-
-    state = rand(rng, STATES, (L, L))
+    
+    state = fill(F, (L, L))
+    is_H = rand(rng, Float64, (L, L)) .< p.init_H_frac
+    state[is_H] .= H
+    
     tick_init = fill(Int64(0), (L, L))
 
     is_H = state .== H

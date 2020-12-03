@@ -11,6 +11,7 @@ library(RSQLite)
 library(dplyr)
 library(ggplot2)
 library(stringr)
+library(tidyr)
 ```
 
 ## Load all data
@@ -52,22 +53,30 @@ ggplot(output1, aes(x = time, y = H)) +
 ## Just plot 'em all
 
 ```{r}
-p <- ggplot(output_runs, aes(x = time, y = H, color = productivity_function_FH)) +
-  geom_line() +
-  facet_grid(rows = vars(max_rate_FH), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))
-ggsave('e1-H_over_time.pdf', p, width = 15, height = 15)
-p
+if(!dir.exists('plots')) {
+  dir.create('plots')
+}
+for(beta in sort(unique(output_runs$beta_init_mean))) {
+  for(prod_func in c('A', 'AF')) {
+    subdir <- file.path('plots', prod_func, sprintf('beta=%.3f', beta))
+    if(!dir.exists(subdir)) {
+      dir.create(subdir, recursive = TRUE)
+    }
+    
+    LxL <- 200 * 200
+    
+    df <- output_runs %>%
+      filter(productivity_function_FH == sprintf('FH_%s', prod_func) & beta_init_mean == beta) %>%
+      select(time, max_rate_FH, rate_DF, H, A, F) %>%
+      mutate(H = H / LxL, A = A / LxL, F = F / LxL) %>%
+      mutate(D = 1 - H - A - F) %>%
+      gather(`H`, `A`, `F`, `D`, key = 'state', value = 'density')
+    
+    p <- ggplot(df, aes(x = time, y = density, color = state)) +
+      geom_line() +
+      facet_grid(rows = vars(max_rate_FH), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))
+    ggsave(file.path(subdir, 'e1-H_over_time.pdf'), p, width = 15, height = 15)
+  }
+}
 ```
-
-```{r}
-p <- ggplot(output_runs, aes(
-    x = time, y = beta_mean, ymin = beta_250, ymax = beta_750, color = productivity_function_FH
-  )) +
-  geom_ribbon(fill = 'lightgray', color = 'lightgray') +
-  geom_line() +
-  facet_grid(rows = vars(max_rate_FH), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))
-ggsave('e1-beta_over_time.pdf', p, width = 15, height = 15)
-p
-```
-
 
