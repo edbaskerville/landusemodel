@@ -31,7 +31,7 @@ BASE_CONFIG <- list(
   
   dt = 0.1,
   
-  t_final = 300,
+  t_final = 1200,
   t_output = 1,
   
   init_H_frac = 0.01,
