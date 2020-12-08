@@ -1,4 +1,6 @@
-MODEL_SCRIPT_PATH <- normalizePath(file.path('..', '..', '..', 'julia', 'main.jl'))
+#!/usr/bin/env Rscript
+
+ROOT_PATH <- normalizePath(file.path('..', '..', '..'))
 
 N_JOBS <- 1
 MAX_CORES_PER_JOB <- 16
@@ -6,17 +8,13 @@ MINUTES_PER_RUN <- 15
 
 N_REPLICATES <- 1
 
-LOCAL <- TRUE
-
 PARAM_VALS <- list(
-  
   replicate_id = 1:N_REPLICATES,
   
   # FH_A: conversion F->H depends on agriculture around humans
   # FH_AF: conversion F->H depends on forest around agriculture around humans
   productivity_function_FH = c('FH_A', 'FH_AF'),
-  beta_init_mean = seq(0.1, 0.5, 0.1),
-  sd_log_beta = c(0.0, 0.1, 0.2, 0.5, 1.0)
+  beta_init_mean = c(0.0001, 0.001, 0.010, 0.100, 1.0, 10.0)
 )
 
 # Starting point for run config.json files
@@ -32,7 +30,7 @@ BASE_CONFIG <- list(
   rate_DF = 0.04,
   
   # Maximum colonization rate of a patch of forest
-  max_rate_FH = 5,
+  max_rate_FH = 12,
   
   # Fraction of colonizations that come from anywhere on the lattice
   # (Need to explore a wider range of values)
@@ -53,9 +51,9 @@ BASE_CONFIG <- list(
   min_rate_frac_HD = 0.001,
   
   # Beta initial value, standard deviation, random walk.
-  # Maybe more initial variance would be good?
-  # sd_log_beta = 0.1 means a about a 10% change per year.
-  sd_log_beta_init = 0.5,
+  sd_beta_init = 0.0,
+  
+  sd_beta = 0.0,
   
   enable_animation = FALSE,
   t_animation_frame = 1,

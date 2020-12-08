@@ -56,7 +56,9 @@ main <- function() {
 
 
 # Template for script to perform a single run
-RUN_SCRIPT_TEMPLATE = 'RUN_ID <- {run_id}
+RUN_SCRIPT_TEMPLATE = '#!/usr/bin/env Rscript
+
+RUN_ID <- {run_id}
 RUN_DIR <- "{escape_backslashes(run_dir)}"
 setwd(RUN_DIR)
 
@@ -152,7 +154,8 @@ Rscript "{escape_backslashes(run_job_path)}"
 '
 
 # Template for job script file
-JOB_SCRIPT_TEMPLATE <- '
+JOB_SCRIPT_TEMPLATE <- '#!/usr/bin/env Rscript
+
 RUNS_PATH <- "{escape_backslashes(runs_path)}"
 RUN_IDS <- c({run_ids_str})
 
@@ -189,6 +192,7 @@ write_job_script <- function(jobs_path, job_id, run_ids) {
     str_glue(JOB_SCRIPT_TEMPLATE),
     run_job_path
   )
+  system(str_glue('chmod +x "{run_job_path}"'))
   
   # Write sbatch file for execution on SLURM
   write(

@@ -1,6 +1,9 @@
-MODEL_SCRIPT_PATH <- normalizePath(file.path('..', '..', '..', 'julia', 'main.jl'))
+#!/usr/bin/env Rscript
+
+ROOT_PATH <- normalizePath(file.path('..', '..', '..'))
+
 N_JOBS <- 1
-MAX_CORES_PER_JOB <- 2
+MAX_CORES_PER_JOB <- 16
 MINUTES_PER_RUN <- 15
 
 N_REPLICATES <- 1
@@ -13,13 +16,10 @@ PARAM_VALS <- list(
   productivity_function_FH = c('FH_A', 'FH_AF'),
   
   # Maximum colonization rate of a patch of forest
-  # 5 to 40 by 5 (8 values)
-  max_rate_FH = seq(5, 40, 5),
+  max_rate_FH = seq(12, 40, 4),
   
   # Rate of forest recovery from degraded state.
-  # Corresponds to mean forest recovery time in years: 100, 50, 25, 10
-  # Ratio (forest time) / (human abandonment time) = 5, 2.5, 1.25, 0.5
-  rate_DF = c(0.01, 0.02, 0.04, 0.1)
+  rate_DF = c(0.05, 0.10, 0.15, 0.20)
 )
 
 # Starting point for run config.json files
@@ -50,11 +50,9 @@ BASE_CONFIG <- list(
   min_rate_frac_HD = 0.001,
   
   # Beta initial value, standard deviation, random walk.
-  # Maybe more initial variance would be good?
-  # sd_log_beta = 0.1 means a about a 10% change per year.
-  beta_init_mean = 0.4,
-  sd_log_beta_init = 0.001,
-  sd_log_beta = 0.1,
+  beta_init_mean = 0.5,
+  sd_beta_init = 0.5,
+  sd_beta = 1.0,
   
   enable_animation = FALSE,
   t_animation_frame = 1,

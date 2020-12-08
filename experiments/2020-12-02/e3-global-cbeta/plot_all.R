@@ -24,7 +24,7 @@ main <- function() {
 }
 
 load_table <- function(tbl_name) {
-  db <- dbConnect(SQLite(), 'experiments/2020-12-02/e3-global-cbeta/db.sqlite')
+  db <- dbConnect(SQLite(), 'db.sqlite')
   tbl <- dbGetQuery(db, str_glue('SELECT * FROM {tbl_name}'))
   dbDisconnect(db)
   
@@ -62,10 +62,5 @@ plot_state <- function(subdir, df) {
     facet_grid(rows = vars(frac_global_FH), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))
   ggsave(file.path(subdir, 'state.pdf'), p, width = 15, height = 15)
 }
-
-output_runs%>%
-  dplyr::filter(time==1200)%>%
-ggplot(aes(x=beta_mean,y=A,color=productivity_function_FH))+geom_point()+
-facet_grid(rows = vars(frac_global_FH), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))
 
 main()

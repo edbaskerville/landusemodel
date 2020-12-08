@@ -27,6 +27,8 @@ mutable struct Parameters
     
     t_final::Float64
     t_output::Float64
+    
+    init_H_frac::Float64
 
     max_rate_FH::Float64
     frac_global_FH::Float64
@@ -40,8 +42,10 @@ mutable struct Parameters
     rate_DF::Float64
     
     beta_init_mean::Float64
-    sd_log_beta_init::Float64
-    sd_log_beta::Float64
+    sd_beta_init::Union{Float64, Nothing}
+    sd_log_beta_init::Union{Float64, Nothing}
+    sd_log_beta::Union{Float64, Nothing}
+    sd_beta::Union{Float64, Nothing}
 
     productivity_function_FH::FHProductivityFunction
 
@@ -92,13 +96,23 @@ end
 
 function ModelState(rng, p)
     L = p.L
-
-    state = rand(rng, STATES, (L, L))
+    
+    state = fill(F, (L, L))
+    is_H = rand(rng, Float64, (L, L)) .< p.init_H_frac
+    state[is_H] .= H
+    
     tick_init = fill(Int64(0), (L, L))
 
     is_H = state .== H
-    beta = p.beta_init_mean *
-        is_H .* exp.(p.sd_log_beta_init * randn(rng, (L, L)))
+    
+    @assert (p.sd_beta_init === nothing) != (p.sd_log_beta_init === nothing)
+    @assert (p.sd_beta === nothing) != (p.sd_log_beta === nothing)
+    
+    beta = if p.sd_beta_init === nothing
+        p.beta_init_mean * is_H .* exp.(p.sd_log_beta_init * randn(rng, (L, L)))
+    else
+        max.(0.0, (p.beta_init_mean .+ p.sd_beta_init * randn(rng, (L, L))) .* is_H)
+    end
 
     ModelState(state, tick_init, beta)
 end
@@ -341,10 +355,18 @@ function step_simulation(s::Simulation, tick::Int64)
         new_state_F +
         changed_D .* Fs
 
-    sd_dt = sqrt(p.sd_log_beta^2 * dt)
-    new_beta = exp.(sd_dt * randn(rng, LxL)) .* (
-        ms.beta .* (1.0 .- changed_H) + new_beta_FH
-    )
+    new_beta_before_walk = ms.beta .* (1.0 .- changed_H) + new_beta_FH
+    new_beta = if p.sd_beta === nothing
+        sd_dt = sqrt(p.sd_log_beta^2 * dt)
+        exp.(sd_dt * randn(rng, LxL)) .* new_beta_before_walk
+    else
+        max.(
+            0.0,
+            (new_state .== H) .* (
+                new_beta_before_walk .+ p.sd_beta * randn(rng, LxL)
+            )
+        )
+    end
     
     for state in STATES
         s.lifetime_counts[state] += sum(changed_by_state[state])

@@ -8,8 +8,9 @@ library(stringr)
 library(tidyr)
 
 main <- function() {
-  output <- load_table("output")
-  runs <- load_table("runs")
+
+  output <- load_table('output')
+  runs <- load_table('runs')
   output_runs <- output %>% left_join(runs, 'run_id')
 
   if(!dir.exists('plots')) {
@@ -21,12 +22,7 @@ main <- function() {
       plot_one(output_runs, prod_func, beta)
     }
   }
- 
-  if(!dir.exists('plots_b')) {
-    dir.create('plots_b')
-  }
-  
-   
+
       plot_two(output_runs)
 
 }
@@ -54,8 +50,6 @@ plot_one <- function(df, prod_func, beta) {
     mutate(D = 1 - H - A - F) %>%
     gather(`H`, `A`, `F`, `D`, key = 'state', value = 'density')
 
-  
-  
   plot_timeseries(subdir, subdf)
 }
 
@@ -124,7 +118,5 @@ plot_beta_F_A_AF <- function(subdf2) {
          plot =  gridExtra::grid.arrange(p_H,p_A,p_F,p_D,ncol=2),
          width = 15, height = 15)
 }
-
-
 
 main()

@@ -1,0 +1,73 @@
+---
+title: "Stationarity test"
+output: html_notebook
+---
+
+## Preamble
+
+```{r message=FALSE}
+library(DBI)
+library(RSQLite)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+```
+
+## Load all data
+
+```{r}
+load_table <- function(tbl_name) {
+  db <- dbConnect(SQLite(), 'db.sqlite')
+  tbl <- dbGetQuery(db, str_glue('SELECT * FROM {tbl_name}'))
+  dbDisconnect(db)
+  
+  tbl
+}
+```
+
+
+```{r}
+output <- load_table('output')
+runs <- load_table('runs')
+output_runs <- output %>% left_join(runs, 'run_id')
+```
+
+## Test one run
+
+```{r}
+output1 <- output %>% filter(run_id == 64)
+```
+
+```{r}
+ggplot(output1, aes(x = time, y = beta_500)) +
+  geom_line()
+```
+
+```{r}
+ggplot(output1, aes(x = time, y = H)) +
+  geom_line()
+```
+
+
+## Just plot 'em all
+
+```{r}
+p <- ggplot(output_runs, aes(x = time, y = H, color = productivity_function_FH)) +
+  geom_line() +
+  facet_grid(rows = vars(beta_init_mean), labeller = labeller(.rows = label_both, .cols = label_both))
+ggsave('e1-H_over_time.pdf', p, width = 15, height = 15)
+p
+```
+
+```{r}
+p <- ggplot(output_runs, aes(
+    x = time, y = beta_mean, ymin = beta_250, ymax = beta_750, color = productivity_function_FH
+  )) +
+  geom_ribbon(fill = 'lightgray', color = 'lightgray') +
+  geom_line() +
+  facet_grid(rows = vars(beta_init_mean), labeller = labeller(.rows = label_both, .cols = label_both))
+ggsave('e1-beta_over_time.pdf', p, width = 15, height = 15)
+p
+```
+
+

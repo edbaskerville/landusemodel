@@ -1,5 +1,4 @@
-ROOT_PATH <- normalizePath(file.path('..', '..', '..', 'julia'))
-RUN_EXEC_PATH <- file.path(ROOT_PATH, 'main.jl')
+MODEL_SCRIPT_PATH <- normalizePath(file.path('..', '..', '..', 'julia', 'main.jl'))
 
 N_JOBS <- 100
 MAX_CORES_PER_JOB <- 14
