@@ -76,21 +76,21 @@ plot_beta <- function(subdir, df) {
 
 plot_beta_mean <-function(df){
 beta_S<-df%>%
-  dplyr::filter(time>600)%>%
+  dplyr::filter(time>600, rate_DF==0.04,max_rate_AD<2)%>%
   dplyr::mutate(Variant = substring(productivity_function_FH, 4))%>%
   dplyr::group_by(max_rate_AD,Variant,rate_DF,min_rate_frac_AD)%>%
   dplyr::summarise_all(mean)%>% 
-  ggplot(aes(y = beta_mean, x= factor(1/min_rate_frac_AD),fill=Variant)) + 
+  ggplot(aes(y = beta_mean, x= factor(1/max_rate_AD),fill=Variant)) + 
   geom_bar(stat = "identity",position=position_dodge(),color="black")+
   geom_errorbar(aes(ymin = beta_025, ymax = beta_750),position=position_dodge()) +
-  scale_y_continuous("deforestation rate",expand = expansion(mult = c(0, .1)))+
-  scale_x_discrete("Forest re-generation time")+
-  facet_grid(rows = vars(max_rate_AD), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))+
+  scale_y_continuous("Deforestation rate",expand = expansion(mult = c(0, .1)))+
+  scale_x_discrete("Agriculture degradation time")+
+  facet_grid(rows = vars(), cols = vars(min_rate_frac_AD), labeller = labeller(.rows = label_both, .cols = label_both))+
   ggtitle("")+
   theme_minimal() +
   scale_fill_manual(values=c('#999999','#E69F00'))
 
-ggsave(file.path("experiments/2020-12-07/e2-degradation-vbeta/", 'vbeta_mean_sd_vs_rate_AD.png'),   beta_S, width = 22, height = 10)
+ggsave(file.path("experiments/2020-12-07/e2-degradation-vbeta/", 'vbeta_mean_sd_vs_rate_AD.png'),   beta_S, width =8.5, height = 5,units = "in")
 
 }
 

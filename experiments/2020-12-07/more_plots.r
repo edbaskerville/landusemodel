@@ -67,7 +67,7 @@ plot_timeseries <- function(subdf) {
     scale_color_manual(values = c("yellow","brown","darkgreen","blue"),guide="none")+
     facet_grid(rows = vars(Variant), cols = vars(`forest regeneration`), labeller = labeller(.rows = label_both, .cols = label_both))+
   theme_minimal(base_size = 10)
-  ggsave(file.path('experiments/2020-12-07/timeseries_states_e1_vb.png'), p, width = 8.5, height = 4,units = "in")
+  ggsave(file.path('experiments/2020-12-07/e1_timeseries_states_vb.png'), p, width = 8.5, height = 4,units = "in")
 }
 
 
@@ -80,7 +80,7 @@ plot_beta <- function(subdf2) {
     scale_y_continuous("Deforestation rate")+
     facet_grid(rows = vars(Variant), cols = vars(`forest regeneration`), labeller = labeller(.rows = label_both, .cols = label_both))+
     theme_minimal(base_size = 10)
-  ggsave(file.path('experiments/2020-12-07/beta_ts_e1_vb.png'), p, width = 8.5, height = 4,units = "in")
+  ggsave(file.path('experiments/2020-12-07/e1_beta_ts_vb.png'), p, width = 8.5, height = 4,units = "in")
 }
 
 
