@@ -1,8 +1,21 @@
+#!/usr/bin/env Rscript
+
+library(DBI)
+library(RSQLite)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(tidyr)
 main <- function() {
   output <- load_table('output')
   runs <- load_table('runs')
   output_runs <- output %>% left_join(runs, 'run_id')
+
+  output <- load_table_cb('output')
+  runs <- load_table_cb('runs')
+  output_runs_e1_cb <- output %>% left_join(runs, 'run_id')
   
+    
   
   output <- load_table_e3('output')
   runs <- load_table_e3('runs')
@@ -41,6 +54,32 @@ main <- function() {
   
   plot_lifespan(subdf3)
   
+  output_runs_e1_cb%>%
+    dplyr::filter(time>600,max_rate_FH==32,rate_DF==0.02)%>%
+    dplyr::mutate(`forest regeneration` = 1/rate_DF)%>%
+    dplyr::mutate(Variant = substring(productivity_function_FH, 4))%>%
+    dplyr::select(time,`forest regeneration`,H,A,F,D,Variant,beta_mean)%>%  
+    dplyr::group_by(Variant,`forest regeneration`,beta_mean)%>%
+    dplyr::summarise(H=mean(H)/ LxL,
+                         A=mean(A)/ LxL,
+                         F=mean(F)/ LxL,
+                         D=mean(D)/ LxL
+                         )->df_e1_cb
+  
+  
+  
+  
+  output_runs_e1_cb%>%
+    filter(time>600) %>%
+    dplyr::mutate(`forest regeneration` = 1/rate_DF)%>%
+    dplyr::mutate(Variant = substring(productivity_function_FH, 4))%>%
+    select(time, beta_mean,max_rate_FH, rate_DF, H, A, F,Variant) %>%
+    mutate(H = H / LxL, A = A / LxL, F = F / LxL) %>%
+    mutate(D = 1 - H - A - F) %>%
+    gather(`H`, `A`, `F`, `D`, key = 'state', value = 'density')->df_e1_cb
+  dplyr::group_by(Variant,`forest regeneration`,beta_mean)%>%
+    dplyr::summarise(state=mean(state))->df_e1_cb
+  
 }
 
 load_table <- function(tbl_name) {
@@ -50,6 +89,16 @@ load_table <- function(tbl_name) {
   
   tbl
 }
+
+load_table_cb <- function(tbl_name) {
+  db <- dbConnect(SQLite(), 'experiments/2020-12-07/e1-colonization-cbeta/db.sqlite')
+  tbl <- dbGetQuery(db, str_glue('SELECT * FROM {tbl_name}'))
+  dbDisconnect(db)
+  
+  tbl
+}
+
+
 
 load_table_e3 <- function(tbl_name) {
   db <- dbConnect(SQLite(), 'experiments/2020-12-07/e3-global-vbeta/db.sqlite')
@@ -135,5 +184,18 @@ width = 8.5, height = 8.5,units = "in")
   
 }
 
+###########################################################################
+
+
+
+plot_betastate_v_vs_c_beta<-function(df_v, df_c){
+  
+  p_H <- df_e1_cb%>%
+    ggplot(aes(x = beta_mean , y = H,color= Variant ,group=Variant))+
+    geom_line()+
+    geom_point()+
+    scale_x_log10()
+  p_H
+}
 
 main() 
