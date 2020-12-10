@@ -260,11 +260,12 @@ function step_simulation(s::Simulation, tick::Int64)
         rate = p.max_rate_AD * (p.min_rate_frac_AD .+ (1.0 - p.min_rate_frac_AD) * (1.0 .- nn_F ./ 8.0))
         is_A .& draw_event_happened(rate)
     end
-
+    
+    # Colonization (F -> H); productivity function A
     function productivity_FH_A()
-        # Density of A for locations in state H (assumes one neighbor is F)
+        # Density of A for locations in state H
         # (zeros for locations not in state H)
-        density_A_H = is_H .* (sum_over_neighbors(is_A) ./ 7.0)
+        density_A_H = is_H .* (sum_over_neighbors(is_A) ./ 8.0)
 
         # Mean density_A_H over neighbors for sites in state F
         mean_density_A_H = is_F .* (sum_over_neighbors(density_A_H) ./ 8.0)
@@ -278,12 +279,13 @@ function step_simulation(s::Simulation, tick::Int64)
         )
     end
 
+    # Colonization (F -> H); productivity function AF
     function productivity_FH_AF()
-        # Density of F for locations in state A (assumes one neighbor is H)
-        density_F_A = is_A .* (sum_over_neighbors(is_F) ./ 7.0)
+        # Density of F for locations in state A
+        density_F_A = is_A .* (sum_over_neighbors(is_F) ./ 8.0)
 
-        # Mean density_F_A over neighbors for sites in state H (assumes one neighbor is F)
-        density_F_A_H = is_H .* (sum_over_neighbors(density_F_A) ./ 7.0)
+        # Mean density_F_A over neighbors for sites in state H
+        density_F_A_H = is_H .* (sum_over_neighbors(density_F_A) ./ 8.0)
 
         # Mean density_F_A_H over neighbors for sites in state F
         mean_density_F_A_H = is_F .* (sum_over_neighbors(density_F_A_H) ./ 8.0)
@@ -296,7 +298,7 @@ function step_simulation(s::Simulation, tick::Int64)
             p.frac_global_FH * mean_density_F_A_H_global
         )
     end
-
+    
     function step_F()
         prod_local, prod_global = if p.productivity_function_FH == FH_A
             productivity_FH_A()
