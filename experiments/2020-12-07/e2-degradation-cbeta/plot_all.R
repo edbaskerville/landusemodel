@@ -26,7 +26,7 @@ main <- function() {
 }
 
 load_table <- function(tbl_name) {
-  db <- dbConnect(SQLite(), 'db.sqlite')
+  db <- dbConnect(SQLite(), 'experiments/2020-12-07/e2-degradation-cbeta/db.sqlite')
   tbl <- dbGetQuery(db, str_glue('SELECT * FROM {tbl_name}'))
   dbDisconnect(db)
   

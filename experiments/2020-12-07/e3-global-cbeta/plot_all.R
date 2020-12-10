@@ -63,4 +63,10 @@ plot_state <- function(subdir, df) {
   ggsave(file.path(subdir, 'state.pdf'), p, width = 15, height = 15)
 }
 
+output_runs%>%
+  dplyr::filter(time==1200)%>%
+ggplot(aes(x=beta_mean,y=A,color=productivity_function_FH))+geom_point()+
+facet_grid(rows = vars(frac_global_FH), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))
+
+
 main()

@@ -24,7 +24,7 @@ main <- function() {
 }
 
 load_table <- function(tbl_name) {
-  db <- dbConnect(SQLite(), 'db.sqlite')
+  db <- dbConnect(SQLite(), 'experiments/2020-12-02/e2-degradation-vbeta/db.sqlite')
   tbl <- dbGetQuery(db, str_glue('SELECT * FROM {tbl_name}'))
   dbDisconnect(db)
   
@@ -72,5 +72,28 @@ plot_beta <- function(subdir, df) {
     facet_grid(rows = vars(min_rate_frac_AD), cols = vars(max_rate_AD), labeller = labeller(.rows = label_both, .cols = label_both))
   ggsave(file.path(subdir, 'beta.pdf'), p, width = 15, height = 15)
 }
+
+plot_beta_mean <-function(df){
+beta_S<-df%>%
+  dplyr::filter(time>600)%>%
+  dplyr::mutate(Variant = substring(productivity_function_FH, 4))%>%
+  dplyr::group_by(max_rate_FH,Variant,rate_DF)%>%
+  
+  dplyr::summarise_all(mean)%>% 
+  ggplot(aes(y = beta_mean, x= factor(1/min_rate_frac_AD),fill=Variant)) + 
+  geom_bar(stat = "identity",position=position_dodge(),color="black")+
+  geom_errorbar(aes(ymin = beta_mean-beta_sd, ymax = beta_mean+beta_sd),position=position_dodge()) +
+  scale_y_continuous("deforestation rate",expand = expansion(mult = c(0, .1)))+
+  scale_x_discrete("Forest re-generation time")+
+  facet_grid(rows = vars(), cols = vars(max_rate_FH), labeller = labeller(.rows = label_both, .cols = label_both))+
+  ggtitle("")+
+  theme_classic() +
+  scale_fill_manual(values=c('#999999','#E69F00'))
+
+ggsave(file.path("experiments/2020-12-02/e1-colonization-vbeta/", 'vbeta_mean_sd_vs_rate_DF.png'),   beta_S, width = 22, height = 10)
+
+}
+
+
 
 main()

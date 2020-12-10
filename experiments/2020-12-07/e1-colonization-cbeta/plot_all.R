@@ -8,6 +8,7 @@ library(stringr)
 library(tidyr)
 
 main <- function() {
+
   output <- load_table('output')
   runs <- load_table('runs')
   output_runs <- output %>% left_join(runs, 'run_id')
@@ -21,10 +22,13 @@ main <- function() {
       plot_one(output_runs, prod_func, beta)
     }
   }
+
+      plot_two(output_runs)
+
 }
 
 load_table <- function(tbl_name) {
-  db <- dbConnect(SQLite(), 'db.sqlite')
+  db <- dbConnect(SQLite(), 'experiments/2020-12-07/e1-colonization-cbeta/db.sqlite')
   tbl <- dbGetQuery(db, str_glue('SELECT * FROM {tbl_name}'))
   dbDisconnect(db)
   
@@ -45,15 +49,71 @@ plot_one <- function(df, prod_func, beta) {
     mutate(H = H / LxL, A = A / LxL, F = F / LxL) %>%
     mutate(D = 1 - H - A - F) %>%
     gather(`H`, `A`, `F`, `D`, key = 'state', value = 'density')
-  
+
   plot_timeseries(subdir, subdf)
 }
+
+
+plot_two <- function(df) {
+  
+  LxL <- 200 * 200
+  
+  subdf2 <- df %>%
+    filter(time>1000) %>%
+    dplyr::mutate(Variant = substring(productivity_function_FH, 4))%>%
+    select(time, beta_mean,max_rate_FH, rate_DF, H, A, F,Variant) %>%
+    mutate(H = H / LxL, A = A / LxL, F = F / LxL) %>%
+    mutate(D = 1 - H - A - F) %>%
+    gather(`H`, `A`, `F`, `D`, key = 'state', value = 'density')
+  
+  
+  
+  plot_beta_F_A_AF(subdf2)
+}
+
+
 
 plot_timeseries <- function(subdir, subdf) {
   p <- ggplot(subdf, aes(x = time, y = density, color = state)) +
     geom_line() +
     facet_grid(rows = vars(max_rate_FH), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))
   ggsave(file.path(subdir, 'timeseries.pdf'), p, width = 15, height = 15)
+}
+
+plot_beta_F_A_AF <- function(subdf2) {
+  p_H <- dplyr::filter(subdf2,state=="H" & beta_mean<30)%>%
+    ggplot(aes(x = beta_mean , y = density, color = Variant ,group=time)) +
+    geom_point()+
+    
+    facet_grid(rows = vars(max_rate_FH), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))+
+    ggtitle("Settlements")
+  
+  p_A <- dplyr::filter(subdf2,state=="A"  & beta_mean<30)%>%
+    ggplot(aes(x = beta_mean , y = density, color = Variant ,group=time)) +
+    geom_point()+
+    
+    facet_grid(rows = vars(max_rate_FH), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))+
+    ggtitle("Agriculture")
+  
+  p_F <- dplyr::filter(subdf2,state=="F"  & beta_mean<30)%>%
+    ggplot(aes(x = beta_mean , y = density, color = Variant ,group=time)) +
+    geom_point()+
+    
+    facet_grid(rows = vars(max_rate_FH), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))+
+    ggtitle("Forest")
+  
+  p_D <- dplyr::filter(subdf2,state=="D"  & beta_mean<30)%>%
+    ggplot(aes(x = beta_mean , y = density, color = Variant ,group=time)) +
+    geom_point()+
+    
+    facet_grid(rows = vars(max_rate_FH), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))+
+    ggtitle("Degraded")
+  
+  
+  
+  ggsave(file.path('experiments/2020-12-07/e1-colonization-cbeta/cbeta_vs_states.png'),
+         plot =  gridExtra::grid.arrange(p_H,p_A,p_F,p_D,ncol=2),
+         width = 20, height = 15)
 }
 
 main()
