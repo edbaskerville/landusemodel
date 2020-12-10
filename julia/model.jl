@@ -27,6 +27,7 @@ mutable struct Parameters
     
     t_final::Float64
     t_output::Float64
+    t_burnin::Union{Float64, Nothing} # only used for lifetime calculations
     
     init_H_frac::Float64
 
@@ -70,6 +71,14 @@ mutable struct Parameters
     end
 end
 JSON2.@format Parameters noargs
+
+function t_burnin(p::Parameters)
+    if p.t_burnin === nothing
+        p.t_final / 2
+    else
+        p.t_burnin
+    end
+end
 
 function load_parameters_from_json(filename) :: Parameters
     str = open(f -> read(f, String), filename)
@@ -211,10 +220,11 @@ end
 
 function step_simulation(s::Simulation, tick::Int64)
 #     println(tick)
-
+    
     p = s.params
     rng = s.rng
     dt = p.dt
+    t = tick * p.dt
 
     LxL = (p.L, p.L)
     Hs = fill(H, LxL)
@@ -260,11 +270,12 @@ function step_simulation(s::Simulation, tick::Int64)
         rate = p.max_rate_AD * (p.min_rate_frac_AD .+ (1.0 - p.min_rate_frac_AD) * (1.0 .- nn_F ./ 8.0))
         is_A .& draw_event_happened(rate)
     end
-
+    
+    # Colonization (F -> H); productivity function A
     function productivity_FH_A()
-        # Density of A for locations in state H (assumes one neighbor is F)
+        # Density of A for locations in state H
         # (zeros for locations not in state H)
-        density_A_H = is_H .* (sum_over_neighbors(is_A) ./ 7.0)
+        density_A_H = is_H .* (sum_over_neighbors(is_A) ./ 8.0)
 
         # Mean density_A_H over neighbors for sites in state F
         mean_density_A_H = is_F .* (sum_over_neighbors(density_A_H) ./ 8.0)
@@ -278,12 +289,13 @@ function step_simulation(s::Simulation, tick::Int64)
         )
     end
 
+    # Colonization (F -> H); productivity function AF
     function productivity_FH_AF()
-        # Density of F for locations in state A (assumes one neighbor is H)
-        density_F_A = is_A .* (sum_over_neighbors(is_F) ./ 7.0)
+        # Density of F for locations in state A
+        density_F_A = is_A .* (sum_over_neighbors(is_F) ./ 8.0)
 
-        # Mean density_F_A over neighbors for sites in state H (assumes one neighbor is F)
-        density_F_A_H = is_H .* (sum_over_neighbors(density_F_A) ./ 7.0)
+        # Mean density_F_A over neighbors for sites in state H
+        density_F_A_H = is_H .* (sum_over_neighbors(density_F_A) ./ 8.0)
 
         # Mean density_F_A_H over neighbors for sites in state F
         mean_density_F_A_H = is_F .* (sum_over_neighbors(density_F_A_H) ./ 8.0)
@@ -296,7 +308,7 @@ function step_simulation(s::Simulation, tick::Int64)
             p.frac_global_FH * mean_density_F_A_H_global
         )
     end
-
+    
     function step_F()
         prod_local, prod_global = if p.productivity_function_FH == FH_A
             productivity_FH_A()
@@ -368,12 +380,14 @@ function step_simulation(s::Simulation, tick::Int64)
         )
     end
     
-    for state in STATES
-        s.lifetime_counts[state] += sum(changed_by_state[state])
-        s.lifetime_sums[state] += sum(tick .- ms.tick_init[changed_by_state[state]]) * dt
+    if t > t_burnin(p)
+        for state in STATES
+            s.lifetime_counts[state] += sum(changed_by_state[state])
+            s.lifetime_sums[state] += sum(tick .- ms.tick_init[changed_by_state[state]]) * dt
+        end
     end
-    new_tick_init = unchanged .* ms.tick_init + changed .* tick
     
+    new_tick_init = unchanged .* ms.tick_init + changed .* tick
     s.model_state = ModelState(new_state, new_tick_init, new_beta)
 end
 
@@ -455,13 +469,13 @@ function write_output(s::Simulation, db::SQLite.DB, tick::Int64)
         [
             t_output, # time
             sum(ms.state .== H),
-            get_lifetime_avg(s, H),
+            get_lifetime_avg(t_output, s, H),
             sum(ms.state .== A),
-            get_lifetime_avg(s, A),
+            get_lifetime_avg(t_output, s, A),
             sum(ms.state .== F),
-            get_lifetime_avg(s, F),
+            get_lifetime_avg(t_output, s, F),
             sum(ms.state .== D),
-            get_lifetime_avg(s, D)
+            get_lifetime_avg(t_output, s, D)
         ],
         [beta_mean, beta_sd, beta_min, beta_max],
         beta_quantiles
@@ -530,8 +544,14 @@ function make_beta_image(s::Simulation)
     convert.(betas)
 end
 
-function get_lifetime_avg(s::Simulation, state::Int64)
-    s.lifetime_sums[state] / s.lifetime_counts[state]
+function get_lifetime_avg(t::Float64, s::Simulation, state::Int64)
+    p = s.params
+    print(t_burnin(p))
+    if t > t_burnin(p)
+        s.lifetime_sums[state] / s.lifetime_counts[state]
+    else
+        NaN
+    end
 end
 
 function apply_offset(loc, offset, L)

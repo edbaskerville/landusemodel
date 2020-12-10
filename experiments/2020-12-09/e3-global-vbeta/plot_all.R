@@ -7,7 +7,12 @@ library(ggplot2)
 library(stringr)
 library(tidyr)
 
+EXP_DIR_RELATIVE <- 'experiments/2020-12-09/e3-global-vbeta'
+
 main <- function() {
+  # Change to correct WD
+  old_wd <- change_directory()
+  
   output <- load_table('output')
   runs <- load_table('runs')
   output_runs <- output %>% left_join(runs, 'run_id')
@@ -21,10 +26,43 @@ main <- function() {
   }
   
   plot_beta_mean(output_runs)
+  
+  # Reset WD
+  setwd(old_wd)
+}
+
+change_directory <- function() {
+  exp_name <- basename(EXP_DIR_RELATIVE)
+  date_str <- basename(dirname(EXP_DIR_RELATIVE))
+  
+  old_wd <- getwd()
+  cat(sprintf('old wd: %s\n', old_wd))
+  
+  old_wd_basename <- basename(old_wd)
+  old_wd_dirname <- basename(dirname(old_wd))
+  if(old_wd_basename == exp_name) {
+    if(old_wd_dirname == date_str) {
+      cat('Already in correct directory\n')
+    }
+    else {
+      stop('In directory for wrong date!')
+    }
+  }
+  else {
+    if(endsWith(old_wd_basename, 'landusemodel')) {
+      cat('In root; changing to experiment directory\n')
+      setwd(EXP_DIR_RELATIVE)
+    }
+    else {
+      stop("Can't deal with current WD")
+    }
+  }
+  
+  old_wd
 }
 
 load_table <- function(tbl_name) {
-  db <- dbConnect(SQLite(), 'experiments/2020-12-07/e3-global-vbeta/db.sqlite')
+  db <- dbConnect(SQLite(), 'db.sqlite')
   tbl <- dbGetQuery(db, str_glue('SELECT * FROM {tbl_name}'))
   dbDisconnect(db)
   
@@ -92,7 +130,7 @@ plot_beta_mean <-function(df){
     theme_minimal(base_size = 9) 
     
   
-  ggsave(file.path("experiments/2020-12-07/e3-global-vbeta/", 'vbeta_mean_sd_vs_frac_global.png'),   beta_S, width = 8.5, height = 4,units = "in")
+  ggsave('vbeta_mean_sd_vs_frac_global.png',   beta_S, width = 8.5, height = 4,units = "in")
   
 }
 
