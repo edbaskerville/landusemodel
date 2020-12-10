@@ -55,11 +55,11 @@ main <- function() {
   plot_lifespan(subdf3)
   
   output_runs_e1_cb%>%
-    dplyr::filter(time>600,max_rate_FH==32,rate_DF==0.02)%>%
+    dplyr::filter(time==1200,max_rate_FH==32,rate_DF==0.02)%>%
     dplyr::mutate(`forest regeneration` = 1/rate_DF)%>%
     dplyr::mutate(Variant = substring(productivity_function_FH, 4))%>%
-    dplyr::select(time,`forest regeneration`,H,A,F,D,Variant,beta_mean)%>%  
-    dplyr::group_by(Variant,`forest regeneration`,beta_mean)%>%
+    dplyr::select(time,`forest regeneration`,H,A,F,D,Variant, beta_init_mean)%>%  
+    dplyr::group_by(Variant,`forest regeneration`, beta_init_mean)%>%
     dplyr::summarise(H=mean(H)/ LxL,
                          A=mean(A)/ LxL,
                          F=mean(F)/ LxL,
@@ -67,18 +67,24 @@ main <- function() {
                          )->df_e1_cb
   
   
-  
-  
-  output_runs_e1_cb%>%
-    filter(time>600) %>%
+  output_runs%>%
+    dplyr::filter(time>600,max_rate_FH==32,rate_DF==0.02)%>%
     dplyr::mutate(`forest regeneration` = 1/rate_DF)%>%
     dplyr::mutate(Variant = substring(productivity_function_FH, 4))%>%
-    select(time, beta_mean,max_rate_FH, rate_DF, H, A, F,Variant) %>%
-    mutate(H = H / LxL, A = A / LxL, F = F / LxL) %>%
-    mutate(D = 1 - H - A - F) %>%
-    gather(`H`, `A`, `F`, `D`, key = 'state', value = 'density')->df_e1_cb
-  dplyr::group_by(Variant,`forest regeneration`,beta_mean)%>%
-    dplyr::summarise(state=mean(state))->df_e1_cb
+    dplyr::select(time,`forest regeneration`,H,A,F,D,Variant, beta_mean,beta_025,beta_750)%>%  
+    dplyr::group_by(Variant,`forest regeneration`)%>%
+    dplyr::summarise(beta_mean=mean(beta_mean, na.rm=TRUE),
+                     beta_025=mean(beta_025, na.rm=TRUE),
+                     beta_750=mean(beta_750, na.rm=TRUE),
+                     H=mean(H)/ LxL,
+                     A=mean(A)/ LxL,
+                     F=mean(F)/ LxL,
+                     D=mean(D)/ LxL
+    )->df_e1_vb
+  
+  
+  plot_betastate_v_vs_c_beta(df_v =df_e1_vb,df_c = df_e1_cb)
+  
   
 }
 
@@ -189,13 +195,54 @@ width = 8.5, height = 8.5,units = "in")
 
 
 plot_betastate_v_vs_c_beta<-function(df_v, df_c){
-  
-  p_H <- df_e1_cb%>%
-    ggplot(aes(x = beta_mean , y = H,color= Variant ,group=Variant))+
-    geom_line()+
-    geom_point()+
-    scale_x_log10()
+
+  p_H <- ggplot()+
+    geom_line(data =df_c, aes(x = beta_init_mean , y = H,color= Variant ,group=Variant))+
+    geom_point(data =df_c, aes(x = beta_init_mean , y = H,color= Variant ,group=Variant))+
+    geom_point(data = df_v,aes(x=beta_mean,y=H,color= Variant),shape=19,size=4)+
+    geom_errorbarh(data = df_v,aes(x=beta_mean,y=H,xmax = beta_750, xmin =0.000001+beta_025,color= Variant))+
+    scale_color_manual(values=c('#999999','#E69F00'))+
+    scale_x_continuous("")+
+    theme_classic()#+scale_x_log10("")
   p_H
+  
+  
+  
+  p_F<- ggplot()+
+    geom_line(data =df_c, aes(x = beta_init_mean , y = F,color= Variant ,group=Variant))+
+    geom_point(data =df_c, aes(x = beta_init_mean , y = F,color= Variant ,group=Variant))+
+    geom_point(data = df_v,aes(x=beta_mean,y=F,color= Variant),shape=19,size=4)+
+    geom_errorbarh(data = df_v,aes(x=beta_mean,y=F,xmax = beta_750, xmin =0.000001+beta_025,color= Variant))+
+    scale_color_manual(values=c('#999999','#E69F00'))+
+    scale_x_continuous("")+
+    theme_classic()#+scale_x_log10("")
+  p_F
+  
+  p_A<- ggplot()+
+    geom_line(data =df_c, aes(x = beta_init_mean , y = A,color= Variant ,group=Variant))+
+    geom_point(data =df_c, aes(x = beta_init_mean , y = A,color= Variant ,group=Variant))+
+    geom_point(data = df_v,aes(x=beta_mean,y=A,color= Variant),shape=19,size=4)+
+    geom_errorbarh(data = df_v,aes(x=beta_mean,y=A,xmax = beta_750, xmin =0.000001+beta_025,color= Variant))+
+    scale_color_manual(values=c('#999999','#E69F00'))+
+    scale_x_continuous("Deforestation rate")+
+    theme_classic()#+scale_x_log10("Deforestation rate")
+  p_A
+  
+  p_D<- ggplot()+
+    geom_line(data =df_c, aes(x = beta_init_mean , y = D,color= Variant ,group=Variant))+
+    geom_point(data =df_c, aes(x = beta_init_mean , y = D,color= Variant ,group=Variant))+
+    geom_point(data = df_v,aes(x=beta_mean,y=D,color= Variant),shape=19,size=4)+
+    geom_errorbarh(data = df_v,aes(x=beta_mean,y=D,xmax = beta_750, xmin =0.000001+beta_025,color= Variant))+
+    scale_color_manual(values=c('#999999','#E69F00'))+
+    scale_x_continuous("Deforestation rate")+
+    theme_classic()#+scale_x_log10("Deforestation rate")
+  p_D
+  
+  ggsave(file.path('experiments/2020-12-07/e1_cb_vb_states.png'), 
+  gridExtra::grid.arrange(p_H,p_A,p_F,p_D),
+  width = 8.5, height = 8.5,units = "in")
+  
+  
 }
 
 main() 
