@@ -170,19 +170,21 @@ plot_beta_SS <- function(df) {
     dplyr::filter(time>600)%>%
     dplyr::mutate(Variant = substring(productivity_function_FH, 4))%>%
     dplyr::mutate(`forest regeneration` = 1/rate_DF)%>%
-    
+    dplyr::mutate(` ` = max_rate_FH)%>%
     dplyr::group_by(max_rate_FH,Variant,`forest regeneration`)%>%
     
     dplyr::summarise_all(mean)%>% 
     ggplot(aes(y = beta_mean, x=factor(`forest regeneration`),fill=Variant)) + 
-    geom_bar(stat = "identity",position=position_dodge(),color="black")+
-    geom_errorbar(aes(ymin = beta_025, ymax = beta_750),position=position_dodge()) +
+    geom_bar(stat = "identity",position=position_dodge(),color="black",size=0.3)+
+    geom_errorbar(aes(ymin = beta_025, ymax = beta_750),size=0.3,position=position_dodge()) +
     scale_y_continuous("deforestation rate",expand = expansion(mult = c(0, .1)))+
     scale_x_discrete("Forest regeneration [years]")+
     theme_minimal(base_size = 10) +
    scale_fill_manual(values=c('#999999','#E69F00'))+
-    facet_grid(rows = vars(), cols = vars(max_rate_FH), labeller = labeller(.rows = label_both, .cols = label_both))+
-    ggtitle("")
+    facet_grid(rows = vars(), cols = vars(` `), labeller = labeller(.rows = label_both, .cols = label_both))+
+    ggtitle("")+
+    theme(panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_blank())
   
   ggsave('vbeta_mean_sd_vs_rate_DF.png',   beta_S, width = 8.5, height = 4,units = "in")
   
@@ -226,7 +228,8 @@ plot_beta_states<-function(df){
     geom_point(aes(y=F/LxL,color="Forest"),alpha=0.7)+
     geom_point(aes(y=D/LxL,color="Degraded"),alpha=0.7)+
     scale_y_continuous("Density")+
-    scale_size("",range=c(0.1,2),guide="none")+
+    scale_x_continuous("",breaks = c(5,10,25,50,100))+
+    scale_size("Forest regeneration [years]",range=c(0.1,2),guide="none")+
     scale_colour_manual("Land type",values = c("Forest"="darkgreen","Degraded"="brown"),guide="none")+
     theme_minimal(base_size = 12) +
     facet_grid(rows = vars(), cols = vars(Variant), labeller = labeller(.rows = label_both, .cols = label_both))
@@ -242,7 +245,7 @@ plot_beta_states<-function(df){
   geom_point(aes(y=H/LxL,color="Human settlement"),alpha=0.7)+
     geom_point(aes(y=A/LxL,color="Agriculture"),alpha=0.7)+
     scale_y_continuous("Density")+
-    scale_x_continuous("")+
+    scale_x_continuous("",breaks = c(5,10,25,50,100))+
     scale_colour_manual("",values = c("Human settlement"="red","Agriculture"="yellow"),guide="none")+
   scale_size(range=c(0.1,2),guide="none")+
     theme_minimal(base_size = 12) +

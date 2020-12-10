@@ -116,19 +116,22 @@ plot_beta_mean <-function(df){
 beta_S<-df%>%
   dplyr::filter(time>600, rate_DF==0.04,max_rate_AD<2)%>%
   dplyr::mutate(Variant = substring(productivity_function_FH, 4))%>%
-  dplyr::group_by(max_rate_AD,Variant,rate_DF,min_rate_frac_AD)%>%
+  dplyr::mutate(`Agriculture degradation` = factor(1/max_rate_AD))%>%
+  dplyr::group_by(`Agriculture degradation`,Variant,rate_DF,min_rate_frac_AD)%>%
   dplyr::summarise_all(mean)%>% 
-  ggplot(aes(y = beta_mean, x= factor(1/max_rate_AD),fill=Variant)) + 
-  geom_bar(stat = "identity",position=position_dodge(),color="black")+
-  geom_errorbar(aes(ymin = beta_025, ymax = beta_750),position=position_dodge()) +
+  ggplot(aes(y = beta_mean, x= `Agriculture degradation`,fill=Variant)) + 
+  geom_bar(stat = "identity",position=position_dodge(),color="black",size=0.3)+
+  geom_errorbar(aes(ymin = beta_025, ymax = beta_750),position=position_dodge(),size=0.3) +
   scale_y_continuous("Deforestation rate",expand = expansion(mult = c(0, .1)))+
-  scale_x_discrete("Agriculture degradation time")+
+  scale_x_discrete("Agriculture degradation [years]")+
   facet_grid(rows = vars(), cols = vars(min_rate_frac_AD), labeller = labeller(.rows = label_both, .cols = label_both))+
   ggtitle("")+
   theme_minimal() +
-  scale_fill_manual(values=c('#999999','#E69F00'))
+  scale_fill_manual(values=c('#999999','#E69F00'))+
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
 
-ggsave('vbeta_mean_sd_vs_rate_AD.png',   beta_S, width =8.5, height = 5,units = "in")
+ggsave('vbeta_mean_sd_vs_rate_AD.png',   beta_S, width =8.5, height = 4,units = "in")
 
 }
 

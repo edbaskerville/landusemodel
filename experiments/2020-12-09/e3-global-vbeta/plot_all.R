@@ -85,7 +85,8 @@ plot_one <- function(df, prod_func) {
     )
   
   df_state = subdf %>%
-    select(time, frac_global_FH, rate_DF, H, A, F) %>%
+    dplyr::mutate(`forest regeneration` = 1/rate_DF)%>%
+    select(time, frac_global_FH, `forest regeneration`, H, A, F) %>%
     mutate(H = H / LxL, A = A / LxL, F = F / LxL) %>%
     mutate(D = 1 - H - A - F) %>%
     gather(`H`, `A`, `F`, `D`, key = 'state', value = 'density')
@@ -97,40 +98,47 @@ plot_one <- function(df, prod_func) {
 plot_state <- function(subdir, df) {
   p <- ggplot(df, aes(x = time, y = density, color = state)) +
     geom_line() +
-    facet_grid(rows = vars(frac_global_FH), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))
+    facet_grid(rows = vars(frac_global_FH), cols = vars(`forest regeneration`), labeller = labeller(.rows = label_both, .cols = label_both))
   ggsave(file.path(subdir, 'state.pdf'), p, width = 15, height = 15)
 }
 
 plot_beta <- function(subdir, df) {
-  p <- ggplot(df, aes(x = time, color = state)) +
+
+  p <-  df%>%
+    dplyr::mutate(`forest regeneration` = 1/rate_DF)%>%
+    ggplot(aes(x = time, color = state)) +
     geom_ribbon(aes(ymin = beta_025, ymax = beta_975), color = 'lightgray', fill = 'lightgray') +
     geom_line(aes(y = beta_500), color = 'darkgray') +
 
     scale_y_continuous("Deforestation rate")+
 
     geom_line(aes(y = beta_mean), color = 'red') +
-    facet_grid(rows = vars(frac_global_FH), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))
+    facet_grid(rows = vars(frac_global_FH), cols = vars(`forest regeneration`), labeller = labeller(.rows = label_both, .cols = label_both))
   ggsave(file.path(subdir, 'beta.pdf'), p, width = 15, height = 15)
 }
 
 plot_beta_mean <-function(df){
+
   beta_S<-df%>%
     dplyr::filter(time>600)%>%
     dplyr::mutate(Variant = substring(productivity_function_FH, 4))%>%
-    dplyr::group_by(Variant,rate_DF,frac_global_FH)%>%
+    dplyr::mutate(`forest regeneration` = 1/rate_DF)%>%
+    dplyr::group_by(Variant,`forest regeneration`,frac_global_FH)%>%
     dplyr::summarise_all(mean)%>% 
     ggplot(aes(y = beta_mean, x= factor(frac_global_FH),fill=Variant)) + 
-    geom_bar(stat = "identity",position=position_dodge(),color="black")+
-    geom_errorbar(aes(ymin = beta_025, ymax = beta_750),position=position_dodge()) +
-    scale_y_continuous("deforestation rate",expand = expansion(mult = c(0, .1)))+
+    geom_bar(stat = "identity",position=position_dodge(),color="black",size=0.3)+
+    geom_errorbar(aes(ymin = beta_025, ymax = beta_750),position=position_dodge(),size=0.3) +
+    scale_y_continuous("Forest generation [years]",expand = expansion(mult = c(0, .1)))+
     scale_x_discrete("Fraction of global colonization events")+
     ggtitle("")+
     scale_fill_manual(values=c('#999999','#E69F00'))+
-    facet_grid(rows = vars(), cols = vars(rate_DF), labeller = labeller(.rows = label_both, .cols = label_both))+
-    theme_minimal(base_size = 9) 
+    facet_grid(rows = vars(), cols = vars(`forest regeneration`), labeller = labeller(.rows = label_both, .cols = label_both))+
+    theme_minimal(base_size = 10) +
+    theme(panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_blank(),axis.text.x = element_text(size=6))
     
   
-  ggsave('vbeta_mean_sd_vs_frac_global.png',   beta_S, width = 8.5, height = 4,units = "in")
+  ggsave('vbeta_mean_sd_vs_frac_global.png',   beta_S, width = 8.5, height = 3,units = "in")
   
 }
 
